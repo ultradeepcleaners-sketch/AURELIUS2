@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net: Default Deny All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable, hardened global helper primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Hardened Schema validation blueprints
+    function isValidProduct(data) {
+      return data.keys().hasAll(['id', 'name', 'price', 'category'])
+        && data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 200
+        && data.price is number
+        && data.category is string;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'name', 'email'])
+        && data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 200
+        && data.email is string && data.email.size() <= 150;
+    }
+
+    function isValidCertificate(data) {
+      return data.keys().hasAll(['id', 'serialNumber', 'productName'])
+        && data.id is string && data.id.size() <= 128
+        && data.serialNumber is string && data.serialNumber.size() <= 100
+        && data.productName is string && data.productName.size() <= 200;
+    }
+
+    // Users profiles & VIP metrics collection Match Block
+    match /users/{userId} {
+      allow read: if isValidId(userId);
+      allow write: if isValidId(userId) && (
+        userId == 'marcus_sterling' || (isSignedIn() && request.auth.uid == userId)
+      ) && (request.method != 'create' && request.method != 'update' || isValidUser(request.resource.data));
+    }
+
+    // Digital Heritage Vault Certificates Match Block
+    match /certificates/{certificateId} {
+      allow get: if isValidId(certificateId);
+      allow list: if true;
+      allow write: if isValidId(certificateId) && (
+        request.resource.data.userId == 'marcus_sterling' || (isSignedIn() && request.resource.data.userId == request.auth.uid)
+      ) && (request.method != 'create' && request.method != 'update' || isValidCertificate(request.resource.data));
+    }
+
+    // Products collection Match Block
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if true;
+      allow write: if isValidId(productId) && (
+        request.method != 'create' && request.method != 'update' || isValidProduct(request.resource.data)
+      );
+    }
+
+    // Blogs collection Match Block
+    match /blogs/{blogId} {
+      allow get: if isValidId(blogId);
+      allow list: if true;
+      allow write: if isValidId(blogId);
+    }
+  }
+}

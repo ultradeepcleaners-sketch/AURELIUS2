@@ -1,0 +1,6 @@
+{
+  "name": "Aurelius - Luxury Men's Leather Brand",
+  "description": "A world-class, premium ecommerce and lifestyle platform for the modern executive. Crafted from timeless full-grain leather, featuring a curated collection of travel duffels, business bags, sneakers, accessories, and a personalized AI Luxury Concierge.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

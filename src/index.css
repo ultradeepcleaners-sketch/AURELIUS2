@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* Font Family Mappings */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", Georgia, Cambria, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Color Palette Mappings */
+  --color-luxury-black: #111111;
+  --color-luxury-espresso: #2F241F;
+  --color-luxury-saddle: #7A4E2D;
+  --color-luxury-tan: #B98B5D;
+  --color-luxury-ivory: #F8F5EF;
+  --color-luxury-warmwhite: #FCFCFA;
+  --color-luxury-gold: #C5A05A;
+  --color-luxury-bronze: #A5673F;
+  --color-luxury-graphite: #4A4A4A;
+}
+
+/* Custom Scrollbars for Luxurious Horizontal Scrolling & Containers */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1A1A1A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C5A05A;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #A5673F;
+}
+
+/* Luxury visual overrides */
+body {
+  background-color: #111111;
+  color: #FCFCFA;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(26, 26, 26, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(197, 160, 90, 0.2);
+}
+
+.glass-panel-dark {
+  background: rgba(17, 17, 17, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(197, 160, 90, 0.2);
+}
+
+/* Golden luxury gradient text */
+.gold-gradient-text {
+  background: linear-gradient(135deg, #A5673F 0%, #C5A05A 50%, #7A4E2D 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Gold border effect */
+.border-gold-pulse {
+  border-color: rgba(197, 160, 90, 0.4);
+  box-shadow: 0 0 10px rgba(197, 160, 90, 0.1);
+}

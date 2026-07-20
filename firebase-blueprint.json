@@ -1,0 +1,94 @@
+{
+  "collections": {
+    "users": {
+      "description": "User profiles and VIP metrics",
+      "documents": {
+        "{userId}": {
+          "fields": {
+            "id": "string",
+            "name": "string",
+            "email": "string",
+            "points": "number",
+            "tier": "string",
+            "address": "string",
+            "city": "string",
+            "postalCode": "string",
+            "country": "string",
+            "joinedDate": "string"
+          }
+        }
+      }
+    },
+    "certificates": {
+      "description": "Digital Heritage Vault certificates of authenticity for registered leather items",
+      "documents": {
+        "{certificateId}": {
+          "fields": {
+            "id": "string",
+            "serialNumber": "string",
+            "productName": "string",
+            "category": "string",
+            "leatherType": "string",
+            "artisan": "string",
+            "location": "string",
+            "craftedDate": "string",
+            "registeredDate": "string",
+            "owner": "string",
+            "signature": "string",
+            "tallowRatio": "string",
+            "userId": "string"
+          }
+        }
+      }
+    },
+    "products": {
+      "description": "Dynamic custom luxury leather products added via the Admin Dashboard",
+      "documents": {
+        "{productId}": {
+          "fields": {
+            "id": "string",
+            "name": "string",
+            "price": "number",
+            "description": "string",
+            "category": "string",
+            "subcategory": "string",
+            "image": "string",
+            "images": "array",
+            "features": "array",
+            "variantColors": "array",
+            "variantColorsHex": "array",
+            "laptopCompatibility": "string",
+            "waterResistance": "string",
+            "dimensions": "string",
+            "weight": "string",
+            "capacity": "string",
+            "careInstructions": "string",
+            "inStock": "number",
+            "rating": "number",
+            "reviewsCount": "number",
+            "createdAt": "string"
+          }
+        }
+      }
+    },
+    "blogs": {
+      "description": "Curated luxurious blog articles published via the Admin Dashboard",
+      "documents": {
+        "{blogId}": {
+          "fields": {
+            "id": "string",
+            "title": "string",
+            "category": "string",
+            "readTime": "string",
+            "date": "string",
+            "excerpt": "string",
+            "content": "string",
+            "image": "string",
+            "tags": "array",
+            "createdAt": "string"
+          }
+        }
+      }
+    }
+  }
+}

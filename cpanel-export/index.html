@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurelius Atelier - Masterpiece Collection</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Luxury Header -->
+    <header class="atelier-header">
+        <div class="header-container">
+            <div class="header-meta-row">
+                <div class="brand-meta">EST. 2026 • FLORENCE</div>
+                <div class="currency-switcher-wrap">
+                    <span class="switcher-label">CURRENCY:</span>
+                    <select id="currency-select" class="currency-select">
+                        <option value="USD">USD ($)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="GBP">GBP (£)</option>
+                        <option value="JPY">JPY (¥)</option>
+                        <option value="CAD">CAD (CA$)</option>
+                        <option value="AUD">AUD (A$)</option>
+                    </select>
+                </div>
+            </div>
+            <h1 class="brand-logo">AURELIUS</h1>
+            <p class="brand-tagline">HERITAGE LEATHER CRAFT</p>
+        </div>
+    </header>
+
+    <!-- Main Catalog View -->
+    <main class="catalog-container">
+        <div class="section-title-wrap">
+            <span class="section-badge">Atelier Catalog</span>
+            <h2 class="section-title">The Sovereign Collection</h2>
+            <div class="section-divider"></div>
+        </div>
+
+        <!-- Product Grid -->
+        <div id="products-grid" class="products-grid">
+            <!-- Dynamic products injected here by app.js -->
+            <div class="loading-placeholder">Consulting the leather vault ledger...</div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="atelier-footer">
+        <p class="footer-copy">© 2026 Aurelius Atelier. Crafted for long-term endurance.</p>
+        <p class="footer-sub">Standard cPanel Static Ledger System • Connected to products.json</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
