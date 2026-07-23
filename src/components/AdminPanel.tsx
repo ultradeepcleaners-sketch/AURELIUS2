@@ -1,37 +1,93 @@
 import React, { useState, useEffect } from "react";
 import { 
-  DollarSign, ShoppingCart, Users, Sparkles, Flame, Copy, ClipboardCheck, 
-  ArrowUpRight, AlertTriangle, RefreshCw, BarChart2, TrendingUp, Lock, 
-  Unlock, Plus, Trash2, Database, Upload, FileCode, CheckCircle2, ChevronRight,
-  Briefcase, Activity, Check, MapPin, Package, Clock, Edit, FileEdit,
-  BookOpen, Wallet, Settings as SettingsIcon, Bell, Send, Globe, ShieldCheck, Eye
+  Lock, Unlock, LayoutDashboard, ShoppingBag, FolderHeart, ListOrdered, 
+  Users, Settings, Sun, Moon, Plus, Edit, Trash2, Upload, CheckCircle, 
+  AlertCircle, ArrowRight, Search, Eye, Truck, TrendingUp, Coins, LogOut, Play,
+  Briefcase, Check, Mail, Phone, MapPin, DollarSign, RefreshCw, X, ShieldAlert,
+  EyeOff, CheckSquare, Square, Sparkles, Zap, Tag, Star, Layers, Filter, Bookmark, Download
 } from "lucide-react";
 import { 
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, 
   BarChart, Bar, Cell, CartesianGrid, PieChart, Pie, Legend 
 } from "recharts";
-import { Product } from "../types";
-import { DEFAULT_USER } from "../data";
-import { AureliusLogger } from "../utils/AureliusLogger";
+import { Product, CurrencyCode, formatPrice } from "../types";
+import { db } from "../firebase";
+import { collection, doc, setDoc } from "firebase/firestore";
+import { generatePDFReceipt } from "../utils/pdfGenerator";
 
-// Mock static analytics datasets
-const REVENUE_DATA = [
-  { day: "Mon", revenue: 4200 },
-  { day: "Tue", revenue: 5800 },
-  { day: "Wed", revenue: 8100 },
-  { day: "Thu", revenue: 7500 },
-  { day: "Fri", revenue: 11200 },
-  { day: "Sat", revenue: 15400 },
-  { day: "Sun", revenue: 13900 }
+// Quick-Create Featured Collection Templates
+const FEATURED_COLLECTION_TEMPLATES = [
+  {
+    id: "summer-travel-essentials",
+    name: "Summer Travel Essentials",
+    description: "High-velocity full-grain leather luggage, passport folios, and weekender duffels designed for jetset travel and overhead cabin ease.",
+    badge: "Summer Capsule",
+    isFeatured: true,
+    isPublished: true,
+    categoryFilter: "bags",
+    keywords: ["duffel", "bag", "travel", "luggage", "passport", "weekend"]
+  },
+  {
+    id: "heritage-leather-classics",
+    name: "Heritage Leather Classics",
+    description: "Timeless vegetable-tanned briefcases and structured messenger bags crafted with solid brass hardware and hand-burnished edges.",
+    badge: "Heritage Edition",
+    isFeatured: true,
+    isPublished: true,
+    categoryFilter: "bags",
+    keywords: ["briefcase", "messenger", "classic", "heritage", "attache", "satchel"]
+  },
+  {
+    id: "artisanal-footwear-vault",
+    name: "Artisanal Footwear Vault",
+    description: "Hand-burnished Goodyear-welted oxfords, Chelsea boots, and velvet slippers handcrafted in Santa Croce sull'Arno, Italy.",
+    badge: "Craftsmanship Vault",
+    isFeatured: true,
+    isPublished: true,
+    categoryFilter: "shoes",
+    keywords: ["boot", "shoe", "oxford", "loafer", "slipper", "footwear"]
+  },
+  {
+    id: "executive-desk-workspace",
+    name: "Executive Workspace Suite",
+    description: "Architectural leather desk pads, tablet sleeves, travel organizers, and brass key loops engineered for high-stakes focus.",
+    badge: "Atelier Executive",
+    isFeatured: true,
+    isPublished: true,
+    categoryFilter: "accessories",
+    keywords: ["wallet", "belt", "case", "organizer", "strap", "folio", "desk"]
+  },
+  {
+    id: "bespoke-gifting-suite",
+    name: "Bespoke Monogram Gifting Suite",
+    description: "Curated luxury leather gift sets, monogrammed cardholders, and watch rolls presented in gold-embossed Aurelius gift boxes.",
+    badge: "Bespoke Suite",
+    isFeatured: true,
+    isPublished: true,
+    categoryFilter: "accessories",
+    keywords: ["wallet", "key", "cardholder", "gift", "watch", "roll", "accessory"]
+  },
+  {
+    id: "midnight-velvet-series",
+    name: "Midnight Series & Evening",
+    description: "Opulent deep obsidian accessories, velvet loafers, and evening clutches for black-tie galas and late-night lounge soirees.",
+    badge: "Limited Midnight",
+    isFeatured: true,
+    isPublished: true,
+    categoryFilter: "shoes",
+    keywords: ["velvet", "evening", "clutch", "black", "loafer", "midnight"]
+  }
 ];
 
-const COLLECTION_SALES = [
-  { name: "Travel Bags", sales: 24, fill: "#7A4E2D" },
-  { name: "Shoes", sales: 18, fill: "#B98B5D" },
-  { name: "Accessories", sales: 32, fill: "#C5A05A" }
+// High-fidelity clients list fallback
+const DEFAULT_CUSTOMERS = [
+  { id: "CST-01", name: "Marcus Sterling", email: "marcus.sterling@sterlingholdings.co", phone: "+1 (212) 555-8822", address: "740 Park Ave, New York, NY 10021", totalOrders: 4, totalSpending: 1840, accountStatus: "VIP", createdAt: "2026-03-12T08:30:00Z" },
+  { id: "CST-02", name: "Alessia Moretti", email: "alessia.moretti@milano-design.it", phone: "+39 02 8844 2211", address: "Via della Spiga 12, Milan 20121", totalOrders: 2, totalSpending: 840, accountStatus: "Active", createdAt: "2026-04-18T14:20:00Z" },
+  { id: "CST-03", name: "Siddharth Mehta", email: "sid.mehta@mumbaidiamonds.in", phone: "+91 22 5550 1199", address: "Altamount Road, Mumbai 400026", totalOrders: 1, totalSpending: 420, accountStatus: "Active", createdAt: "2026-05-02T11:15:00Z" },
+  { id: "CST-04", name: "Lord Julian Hetherington", email: "j.hetherington@parliament.uk", phone: "+44 20 7946 0912", address: "Belgravia Square, London SW1X 8PH", totalOrders: 3, totalSpending: 1260, accountStatus: "VIP", createdAt: "2026-05-20T09:45:00Z" }
 ];
 
-// Compresses an image file on the client side using Canvas to prevent exceeding Firestore 1MB limits.
+// Helper: Compress images in client-side using Canvas to ensure fit under limits
 function compressImage(file: File, maxWidth = 800, maxHeight = 800, quality = 0.7): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -66,7 +122,6 @@ function compressImage(file: File, maxWidth = 800, maxHeight = 800, quality = 0.
         }
 
         ctx.drawImage(img, 0, 0, width, height);
-        // Save as jpeg to optimize size compression
         const dataUrl = canvas.toDataURL("image/jpeg", quality);
         resolve(dataUrl);
       };
@@ -77,3551 +132,2595 @@ function compressImage(file: File, maxWidth = 800, maxHeight = 800, quality = 0.
 }
 
 interface AdminPanelProps {
-  products?: Product[];
-  onProductAdded?: (newProduct: Product) => void;
-  onProductDeleted?: (id: string) => void;
-  onProductUpdated?: (updatedProduct: Product) => void;
+  products: Product[];
+  onProductAdded: (newProduct: Product) => void;
+  onProductDeleted: (id: string) => void;
+  onProductUpdated: (updatedProduct: Product) => void;
 }
 
-export default function AdminPanel({ 
-  products = [], 
-  onProductAdded, 
+export default function AdminPanel({
+  products,
+  onProductAdded,
   onProductDeleted,
-  onProductUpdated 
+  onProductUpdated
 }: AdminPanelProps) {
-  // Authentication states
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState("");
+  // Theme & Section States
+  const [isAdminDark, setIsAdminDark] = useState<boolean>(true);
+  const [activeMenu, setActiveMenu] = useState<"dashboard" | "products" | "collections" | "orders" | "customers" | "settings">("dashboard");
+
+  // Authentication
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem("aurelius_admin_logged_in") === "true";
+  });
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState("");
 
-  // Sub-navigation tabs
-  const [activeTab, setActiveTab] = useState<"products" | "blog" | "reports" | "wallet" | "settings" | "notifications">("products");
-  const [activeProductSubTab, setActiveProductSubTab] = useState<"inventory" | "skus" | "importer" | "deployment">("inventory");
-
-  // State variables for Blog Hub
-  const [blogsList, setBlogsList] = useState<any[]>([]);
-  const [isFetchingBlogs, setIsFetchingBlogs] = useState(false);
-  const [blogFormTitle, setBlogFormTitle] = useState("");
-  const [blogFormCategory, setBlogFormCategory] = useState("Lifestyle");
-  const [blogFormContent, setBlogFormContent] = useState("");
-  const [blogFormImage, setBlogFormImage] = useState("");
-  const [blogFormTags, setBlogFormTags] = useState("");
-  const [blogFormExcerpt, setBlogFormExcerpt] = useState("");
-  const [blogFormReadTime, setBlogFormReadTime] = useState("");
-  const [editingBlogId, setEditingBlogId] = useState<string | null>(null);
-  const [blogSubmitError, setBlogSubmitError] = useState<string | null>(null);
-  const [blogSubmitSuccess, setBlogSubmitSuccess] = useState<string | null>(null);
-
-  // State variables for Settings panel
-  const [settingsTaxRate, setSettingsTaxRate] = useState<number>(12);
-  const [settingsShippingCost, setSettingsShippingCost] = useState<number>(25);
-  const [settingsVatThreshold, setSettingsVatThreshold] = useState<number>(150);
-  const [settingsShowStockAlerts, setSettingsShowStockAlerts] = useState<boolean>(true);
-  const [settingsGeminiModel, setSettingsGeminiModel] = useState<string>("gemini-2.5-pro");
-  const [settingsVipMultiplier, setSettingsVipMultiplier] = useState<number>(1.5);
-  const [settingsApiToken, setSettingsApiToken] = useState<string>("aur-live-9ad8fe47-375b-4b69");
-  const [settingsWebhookUrl, setSettingsWebhookUrl] = useState<string>("https://api.aurelius.it/webhooks/orders");
-
-  // State variables for Notifications panel
-  const [adminNotifications, setAdminNotifications] = useState<any[]>(() => {
-    const saved = localStorage.getItem("aurelius_admin_notifications");
-    return saved ? JSON.parse(saved) : [
-      { id: "notif-1", title: "Tannery Stock Warning", text: "Aurelius Overlander Weekend Bag is below critical threshold (5 remaining).", level: "warning", date: "July 19, 2026", read: false },
-      { id: "notif-2", title: "Sovereign Series Backorder", text: "Sovereign Oxford size 42 has 4 active VIP client requests on waitlist.", level: "info", date: "July 18, 2026", read: false },
-      { id: "notif-3", title: "AliExpress Sync Succeeded", text: "AI Translation model synchronized Heritage Wallet. Imported 12 stock units.", level: "success", date: "July 17, 2026", read: true },
-      { id: "notif-4", title: "Google Cloud Spanner Active", text: "Durable database synchronization is healthy. Sync latency: 12ms.", level: "success", date: "July 16, 2026", read: true }
-    ];
-  });
-  const [newNotifTitle, setNewNotifTitle] = useState("");
-  const [newNotifText, setNewNotifText] = useState("");
-  const [newNotifLevel, setNewNotifLevel] = useState<"info" | "warning" | "success">("info");
-
-  // Wallet Treasury states
-  const [walletBalance, setWalletBalance] = useState<number>(142580.00);
-  const [walletEscrow, setWalletEscrow] = useState<number>(12400.00);
-  const [walletCurrency, setWalletCurrency] = useState<string>("USD");
-  const [walletPayouts, setWalletPayouts] = useState<any[]>([
-    { id: "payout-1", date: "July 15, 2026", amount: 45000, status: "Settled", destination: "Florence Craftsmanship Cooperatives" },
-    { id: "payout-2", date: "July 10, 2026", amount: 28500, status: "Settled", destination: "Siena Luxury Leather Co." },
-    { id: "payout-3", date: "July 01, 2026", amount: 32000, status: "Settled", destination: "Pisa Hardware Casting s.r.l" },
-    { id: "payout-4", date: "July 19, 2026", amount: 15200, status: "Processing", destination: "Rome Logistics Spedizioni" }
-  ]);
-  const [withdrawalAmount, setWithdrawalAmount] = useState<string>("");
-  const [withdrawalRecipient, setWithdrawalRecipient] = useState<string>("");
-
-  // Dynamic order pipeline tracking
-  const [activeOrderStages, setActiveOrderStages] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem("aurelius_active_stages");
-    return saved ? JSON.parse(saved) : { "AUR-3022": 1, "AUR-9204": 4, "AUR-8113": 4 };
+  // Store Config & Settings State (Committed to settings/store_config)
+  const [storeSettings, setStoreSettings] = useState({
+    storeName: "Aurelius Leather",
+    logoUrl: "",
+    contactEmail: "concierge@aurelius.it",
+    contactPhone: "+39 055 234 5678",
+    socialFacebook: "https://facebook.com/aureliusleather",
+    socialInstagram: "https://instagram.com/aureliusleather",
+    socialTwitter: "https://twitter.com/aureliusleather",
+    baseCurrency: "USD" as CurrencyCode,
+    defaultShippingCost: 25,
+    adminPassword: "aurelius2026"
   });
 
-  const handleUpdateOrderStage = (orderId: string, stageNum: number) => {
-    const nextStages = { ...activeOrderStages, [orderId]: stageNum };
-    setActiveOrderStages(nextStages);
-    localStorage.setItem("aurelius_active_stages", JSON.stringify(nextStages));
-  };
+  // Dynamic Lists states
+  const [orders, setOrders] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [collections, setCollections] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [loadingCollections, setLoadingCollections] = useState(true);
+  const [loadingSettings, setLoadingSettings] = useState(true);
 
-  // AI Copywriter states
-  const [prodName, setProdName] = useState("");
-  const [prodCat, setProdCat] = useState("Travel Bags");
-  const [prodFeatures, setProdFeatures] = useState("");
-  const [prodTone, setProdTone] = useState("luxurious");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedDescription, setGeneratedDescription] = useState("");
-  const [copiedAI, setCopiedAI] = useState(false);
+  // Filter States
+  const [productSearch, setProductSearch] = useState("");
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string>("all");
+  const [productStockFilter, setProductStockFilter] = useState<string>("all");
 
-  // Form states for creating / editing products
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  // Form State for Products
+  const [isEditingProduct, setIsEditingProduct] = useState<boolean>(false);
+  const [productUnderEdit, setProductUnderEdit] = useState<Product | null>(null);
   
   const [formName, setFormName] = useState("");
   const [formPrice, setFormPrice] = useState("");
-  const [formOriginalPrice, setFormOriginalPrice] = useState("");
+  const [formDiscountPrice, setFormDiscountPrice] = useState("");
   const [formCategory, setFormCategory] = useState<"bags" | "shoes" | "accessories">("bags");
   const [formSubcategory, setFormSubcategory] = useState("");
   const [formDescription, setFormDescription] = useState("");
-  const [formInStock, setFormInStock] = useState("10");
-  const [formDimensions, setFormDimensions] = useState("");
-  const [formWeight, setFormWeight] = useState("");
-  const [formCapacity, setFormCapacity] = useState("");
-  const [formCare, setFormCare] = useState("");
-  const [formFeatures, setFormFeatures] = useState("");
-  const [formVariantColors, setFormVariantColors] = useState("");
-  const [formVariantColorsHex, setFormVariantColorsHex] = useState("");
+  const [formStock, setFormStock] = useState("10");
+  const [formSku, setFormSku] = useState("");
+  const [formFeatured, setFormFeatured] = useState(false);
+  const [formDimensions, setFormDimensions] = useState("50cm L x 24cm W x 26cm H");
+  const [formWeight, setFormWeight] = useState("1.5 kg");
+  const [formCare, setFormCare] = useState("Apply beeswax leather conditioner annually.");
+  const [formFeatures, setFormFeatures] = useState("Handcrafted, Full-grain Leather, Brass Zippers");
+  const [formColors, setFormColors] = useState("Vintage Brown, Saddle Tan");
+  const [formColorsHex, setFormColorsHex] = useState("#8B5A2B, #C5A05A");
 
-  // SKU Management states inside the form
-  interface SkuFormState {
-    sku: string;
-    color: string;
-    inStock: number;
-  }
-  const [formSkus, setFormSkus] = useState<SkuFormState[]>([]);
-
-  // SKU view search and filter states
-  const [skuSearch, setSkuSearch] = useState("");
-  const [skuCategoryFilter, setSkuCategoryFilter] = useState<"all" | "bags" | "shoes" | "accessories">("all");
-  const [skuStockFilter, setSkuStockFilter] = useState<"all" | "low" | "out">("all");
-  
-  // Tracking status of active SKU updates
-  const [skuSaveStatus, setSkuSaveStatus] = useState<Record<string, "saved" | "error" | "saving">>({});
-
-  // Multi-image upload states (up to 10 files)
+  // Image Upload Handling
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  
-  // Single video upload states
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [fallbackImageUrl, setFallbackImageUrl] = useState("");
+  const [existingImagesList, setExistingImagesList] = useState<string[]>([]);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const [productFormError, setProductFormError] = useState("");
+  const [productFormSuccess, setProductFormSuccess] = useState("");
 
-  // Preservation states for existing assets when editing
-  const [existingImages, setExistingImages] = useState<string[]>([]);
-  const [existingVideo, setExistingVideo] = useState<string>("");
+  // Collections state
+  const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
+  const [newCollectionName, setNewCollectionName] = useState("");
+  const [newCollectionDesc, setNewCollectionDesc] = useState("");
+  const [newCollectionBadge, setNewCollectionBadge] = useState("");
+  const [isFeaturedCollection, setIsFeaturedCollection] = useState(false);
+  const [newCollectionPublished, setNewCollectionPublished] = useState(true);
+  const [newCollectionProductIds, setNewCollectionProductIds] = useState<string[]>([]);
 
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  // Bulk & Filter Collections states
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
+  const [collectionSearch, setCollectionSearch] = useState("");
+  const [collectionStatusFilter, setCollectionStatusFilter] = useState<"all" | "published" | "draft" | "featured">("all");
+  const [collectionActionNotice, setCollectionActionNotice] = useState("");
 
-  // AI Product Hub / AliExpress Importer states
-  const [importUrl, setImportUrl] = useState("");
-  const [isImporting, setIsImporting] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importSuccess, setImportSuccess] = useState<string | null>(null);
-  const [importedProduct, setImportedProduct] = useState<Product | null>(null);
+  // Active Order detailed modal
+  const [viewingOrder, setViewingOrder] = useState<any | null>(null);
 
-  // Copy to clipboard helpers
-  const [copiedSQL, setCopiedSQL] = useState(false);
-  const [copiedPHP, setCopiedPHP] = useState(false);
+  // Simulation Hub states
+  const [simulationLogs, setSimulationLogs] = useState<string[]>([]);
+  const [simulationStep, setSimulationStep] = useState<number>(0);
+  const [simulationProduct, setSimulationProduct] = useState<any | null>(null);
 
-  // Low stock mock items
-  const lowStockItems = [
-    { id: "overlander-weekend", name: "Aurelius Overlander Weekend Bag", qty: 5 },
-    { id: "aviator-watch", name: "Aurelius Aviator Watch", qty: 8 },
-    { id: "chelsea-boot", name: "Aurelius Chelsea Boot", qty: 9 }
-  ];
+  // Feedbacks
+  const [settingsSuccess, setSettingsSuccess] = useState("");
+  const [settingsError, setSettingsError] = useState("");
 
-  // SQL code to export
-  const SQL_CODE = `CREATE TABLE IF NOT EXISTS \`products\` (
-  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-  \`title\` VARCHAR(255) NOT NULL,
-  \`price\` DECIMAL(10,2) NOT NULL,
-  \`description\` TEXT NOT NULL,
-  \`image_path\` VARCHAR(255) NOT NULL,
-  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
+  // Load all lists from backend/Firestore
+  const fetchAllData = async () => {
+    try {
+      // 1. Fetch settings
+      setLoadingSettings(true);
+      const settingsRes = await fetch("/api/settings");
+      if (settingsRes.ok) {
+        const settingsPayload = await settingsRes.json();
+        if (settingsPayload.success && settingsPayload.data) {
+          setStoreSettings(settingsPayload.data);
+        }
+      }
+      setLoadingSettings(false);
 
-  // Secure PHP upload code to export
-  const PHP_CODE = `<?php
-// Database configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'your_cpanel_db_user');
-define('DB_PASS', 'your_cpanel_db_password');
-define('DB_NAME', 'your_cpanel_db_name');
+      // 2. Fetch orders
+      setLoadingOrders(true);
+      const ordersRes = await fetch("/api/orders");
+      if (ordersRes.ok) {
+        const ordersPayload = await ordersRes.json();
+        if (ordersPayload.success && ordersPayload.data) {
+          setOrders(ordersPayload.data);
+        }
+      }
+      setLoadingOrders(false);
 
-$message = '';
-$messageType = '';
-
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // 1. Secure input sanitization and validation
-    $title = filter_input(INPUT_POST, 'title', FILTER_SANITIZE_SPECIAL_CHARS);
-    $price = filter_input(INPUT_POST, 'price', FILTER_VALIDATE_FLOAT);
-    $description = filter_input(INPUT_POST, 'description', FILTER_SANITIZE_SPECIAL_CHARS);
-
-    if (empty($title) || $price === false || empty($description)) {
-        $message = "Error: Invalid or missing text fields.";
-        $messageType = "error";
-    } else {
-        // 2. Secure file upload handling
-        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-            $fileTmpPath = $_FILES['image']['tmp_name'];
-            $fileName = $_FILES['image']['name'];
-            $fileSize = $_FILES['image']['size'];
-            $fileType = $_FILES['image']['type'];
-            
-            // Extract file extension and validate
-            $fileNameCmps = explode(".", $fileName);
-            $fileExtension = strtolower(end($fileNameCmps));
-            
-            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-            $allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
-            
-            // Verify extension and real mime type (prevents PHP shell upload)
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mimeType = finfo_file($finfo, $fileTmpPath);
-            finfo_close($finfo);
-
-            if (in_array($fileExtension, $allowedExtensions) && in_array($mimeType, $allowedMimeTypes)) {
-                // Limit file size to 5MB
-                if ($fileSize < 5 * 1024 * 1024) {
-                    // Create unique file name to prevent collision
-                    $newFileName = md5(time() . $fileName) . '.' . $fileExtension;
-                    
-                    // Create upload directory if not exists
-                    $uploadFileDir = './uploads/';
-                    if (!is_dir($uploadFileDir)) {
-                        mkdir($uploadFileDir, 0755, true);
-                    }
-                    
-                    $dest_path = $uploadFileDir . $newFileName;
-                    
-                    if (move_uploaded_file($fileTmpPath, $dest_path)) {
-                        // 3. Insert securely using PDO with prepared statements
-                        try {
-                            $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
-                            $options = [
-                                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                                PDO::ATTR_EMULATE_PREPARES   => false,
-                            ];
-                            
-                            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
-                            
-                            $sql = "INSERT INTO products (title, price, description, image_path) VALUES (:title, :price, :description, :image_path)";
-                            $stmt = $pdo->prepare($sql);
-                            
-                            $stmt->execute([
-                                ':title' => $title,
-                                ':price' => $price,
-                                ':description' => $description,
-                                ':image_path' => $dest_path
-                            ]);
-                            
-                            $message = "Masterpiece successfully uploaded and saved into cPanel MySQL Database!";
-                            $messageType = "success";
-                        } catch (PDOException $e) {
-                            $message = "Database Error: " . $e->getMessage();
-                            $messageType = "error";
-                        }
-                    } else {
-                        $message = "Error: There was an issue moving the file to the uploads directory.";
-                        $messageType = "error";
-                    }
-                } else {
-                    $message = "Error: File size exceeds the 5MB limit.";
-                    $messageType = "error";
-                }
-            } else {
-                $message = "Error: Uploaded file is not a valid image. Only JPG, PNG, and WEBP allowed.";
-                $messageType = "error";
-            }
+      // 3. Fetch customers
+      setLoadingCustomers(true);
+      const customersRes = await fetch("/api/customers");
+      if (customersRes.ok) {
+        const customersPayload = await customersRes.json();
+        if (customersPayload.success && customersPayload.data && customersPayload.data.length > 0) {
+          setCustomers(customersPayload.data);
         } else {
-            $message = "Error: Image file is required or upload error occurred.";
-            $messageType = "error";
-        }
-    }
-}
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aurelius Atelier - cPanel Upload Portal</title>
-    <style>
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #111; color: #fff; padding: 40px; margin: 0; }
-        .container { max-width: 600px; margin: 0 auto; background: #1a1a1a; padding: 30px; border-radius: 8px; border: 1px solid #c5a05a; }
-        h1 { font-size: 24px; color: #c5a05a; text-transform: uppercase; margin-top: 0; text-align: center; }
-        .alert { padding: 15px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; }
-        .alert-success { background: #1b4332; border: 1px solid #2d6a4f; color: #d8f3dc; }
-        .alert-error { background: #5c1e1e; border: 1px solid #7c2d2d; color: #fcd5d5; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 12px; color: #aaa; text-transform: uppercase; }
-        input[type="text"], input[type="number"], textarea, input[type="file"] {
-            width: 100%; padding: 10px; margin-bottom: 20px; background: #111; border: 1px solid #333; border-radius: 4px; color: #fff; box-sizing: border-box;
-        }
-        button { width: 100%; padding: 12px; background: #c5a05a; border: none; color: #000; font-weight: bold; border-radius: 4px; cursor: pointer; text-transform: uppercase; }
-        button:hover { background: #a5673f; color: #fff; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Inventory Upload Portal</h1>
-        <?php if (!empty($message)): ?>
-            <div class="alert alert-<?php echo $messageType; ?>"><?php echo $message; ?></div>
-        <?php endif; ?>
-        <form action="" method="POST" enctype="multipart/form-data">
-            <label for="title">Product Title</label>
-            <input type="text" id="title" name="title" required placeholder="e.g. Aurelius Sovereign Duffel">
-
-            <label for="price">Price ($)</label>
-            <input type="number" step="0.01" id="price" name="price" required placeholder="e.g. 295.00">
-
-            <label for="description">Description</label>
-            <textarea id="description" name="description" rows="5" required placeholder="Describe materials, leather type, and care..."></textarea>
-
-            <label for="image">Product Image File</label>
-            <input type="file" id="image" name="image" accept="image/*" required>
-
-            <button type="submit">Submit Masterpiece</button>
-        </form>
-    </div>
-</body>
-</html>`;
-
-  // Authenticate password
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === "aurelius2026") {
-      setIsAuthenticated(true);
-      setAuthError("");
-    } else {
-      setAuthError("Invalid Security Key. Please verify corporate access credentials.");
-    }
-  };
-
-  // Call the server-side API to generate copywriting via Gemini
-  const handleGenerateDescription = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prodName.trim()) return;
-
-    setIsGenerating(true);
-    setGeneratedDescription("");
-    try {
-      const response = await fetch("/api/ai/describe-product", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: prodName,
-          category: prodCat,
-          keyFeatures: prodFeatures,
-          tone: prodTone
-        })
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setGeneratedDescription(data.description);
-      } else {
-        throw new Error(data.error || "Failed to generate");
-      }
-    } catch (err: any) {
-      console.error("AI descrip failure:", err);
-      setGeneratedDescription(`Atelier Error: Failed to invoke our digital leather scribe.\n\nDetails: ${err.message || "Endpoint error"}`);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleCopyAI = () => {
-    navigator.clipboard.writeText(generatedDescription);
-    setCopiedAI(true);
-    setTimeout(() => setCopiedAI(false), 3000);
-  };
-
-  const handleCopySQL = () => {
-    navigator.clipboard.writeText(SQL_CODE);
-    setCopiedSQL(true);
-    setTimeout(() => setCopiedSQL(false), 3000);
-  };
-
-  const handleCopyPHP = () => {
-    navigator.clipboard.writeText(PHP_CODE);
-    setCopiedPHP(true);
-    setTimeout(() => setCopiedPHP(false), 3000);
-  };
-
-  const handleImportAliExpress = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!importUrl) {
-      setImportError("Please provide a valid product URL to initiate the AI Catalog Translation.");
-      return;
-    }
-
-    setIsImporting(true);
-    setImportError(null);
-    setImportSuccess(null);
-    setImportedProduct(null);
-
-    try {
-      const response = await fetch("/api/products/import-aliexpress", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ url: importUrl })
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        setImportSuccess(result.message || "Product translated and added to catalog successfully!");
-        setImportedProduct(result.product || result.data);
-        if (onProductAdded && (result.product || result.data)) {
-          onProductAdded(result.product || result.data);
-        }
-        setImportUrl("");
-      } else {
-        setImportError(result.error || "The AI translation encountered a transient network interruption. Please verify the URL or try again.");
-      }
-    } catch (err: any) {
-      setImportError(err.message || "An unexpected error occurred during import. The catalog core remains secure.");
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  // Fetch blogs from API or default to static BLOGS
-  const fetchBlogs = async () => {
-    setIsFetchingBlogs(true);
-    try {
-      const response = await fetch("/api/blogs");
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.data && result.data.length > 0) {
-          setBlogsList(result.data);
-        } else {
-          // If Firestore collection is empty, load static BLOGS as fallback
-          const { BLOGS } = await import("../data");
-          setBlogsList(BLOGS);
+          setCustomers(DEFAULT_CUSTOMERS);
         }
       } else {
-        const { BLOGS } = await import("../data");
-        setBlogsList(BLOGS);
+        setCustomers(DEFAULT_CUSTOMERS);
       }
-    } catch (err) {
-      console.error("[Aurelius Client Trace] Failed to fetch blogs, using local cache:", err);
-      try {
-        const { BLOGS } = await import("../data");
-        setBlogsList(BLOGS);
-      } catch (e) {}
-    } finally {
-      setIsFetchingBlogs(false);
+      setLoadingCustomers(false);
+
+      // 4. Fetch collections
+      setLoadingCollections(true);
+      const collectionsRes = await fetch("/api/collections");
+      if (collectionsRes.ok) {
+        const collectionsPayload = await collectionsRes.json();
+        if (collectionsPayload.success && collectionsPayload.data) {
+          setCollections(collectionsPayload.data);
+        }
+      }
+      setLoadingCollections(false);
+    } catch (e) {
+      console.error("[Admin Dashboard Startup Fetch Error]:", e);
     }
   };
 
   useEffect(() => {
-    fetchBlogs();
-  }, []);
+    if (isAuthenticated) {
+      fetchAllData();
+    }
+  }, [isAuthenticated]);
 
-  // Publish or Edit Blog post
-  const handlePublishBlog = async (e: React.FormEvent) => {
+  // Login Handler
+  const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    setBlogSubmitError(null);
-    setBlogSubmitSuccess(null);
-
-    if (!blogFormTitle || !blogFormCategory || !blogFormContent) {
-      setBlogSubmitError("Please fill out all required editorial fields.");
-      return;
-    }
-
-    const payload = {
-      title: blogFormTitle,
-      category: blogFormCategory,
-      content: blogFormContent,
-      excerpt: blogFormExcerpt || blogFormContent.substring(0, 150) + "...",
-      image: blogFormImage || "https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&q=80&w=800",
-      readTime: blogFormReadTime || `${Math.max(2, Math.ceil(blogFormContent.split(" ").length / 200))} min read`,
-      tags: blogFormTags ? blogFormTags.split(",").map(t => t.trim()) : ["Atelier", "Leathercraft"],
-      date: new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' })
-    };
-
-    try {
-      if (editingBlogId) {
-        // Edit mode
-        const response = await fetch(`/api/blogs/${editingBlogId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const result = await response.json();
-        if (response.ok && result.success) {
-          setBlogSubmitSuccess("Editorial volume updated successfully in the digital archives.");
-          setEditingBlogId(null);
-          // Refresh
-          await fetchBlogs();
-          // Reset form
-          resetBlogForm();
-        } else {
-          setBlogSubmitError(result.error || "Failed to update the blog volume.");
-        }
-      } else {
-        // Create mode
-        const response = await fetch("/api/blogs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const result = await response.json();
-        if (response.ok && result.success) {
-          setBlogSubmitSuccess("New editorial volume published successfully inside the Aurelius Journal.");
-          // Refresh
-          await fetchBlogs();
-          // Reset form
-          resetBlogForm();
-        } else {
-          setBlogSubmitError(result.error || "Failed to publish the blog volume.");
-        }
-      }
-    } catch (err: any) {
-      setBlogSubmitError(err.message || "An unexpected error interrupted database communication.");
+    setAuthError("");
+    
+    if (adminPasswordInput === storeSettings.adminPassword) {
+      setIsAuthenticated(true);
+      localStorage.setItem("aurelius_admin_logged_in", "true");
+    } else {
+      setAuthError("Incorrect corporate passcode. Authentication rejected.");
     }
   };
 
-  const resetBlogForm = () => {
-    setBlogFormTitle("");
-    setBlogFormCategory("Lifestyle");
-    setBlogFormContent("");
-    setBlogFormImage("");
-    setBlogFormTags("");
-    setBlogFormExcerpt("");
-    setBlogFormReadTime("");
-    setEditingBlogId(null);
+  const handleAdminLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem("aurelius_admin_logged_in");
   };
 
-  const handleEditBlog = (blog: any) => {
-    setBlogFormTitle(blog.title || "");
-    setBlogFormCategory(blog.category || "Lifestyle");
-    setBlogFormContent(blog.content || "");
-    setBlogFormImage(blog.image || "");
-    setBlogFormTags(Array.isArray(blog.tags) ? blog.tags.join(", ") : "");
-    setBlogFormExcerpt(blog.excerpt || "");
-    setBlogFormReadTime(blog.readTime || "");
-    setEditingBlogId(blog.id);
-    setBlogSubmitError(null);
-    setBlogSubmitSuccess(null);
-
-    // Scroll to form anchor
-    const formAnchor = document.getElementById("blog-editor-anchor");
-    if (formAnchor) {
-      formAnchor.scrollIntoView({ behavior: "smooth" });
-    }
-  };
-
-  const handleDeleteBlog = async (id: string) => {
-    if (!confirm("Are you absolutely sure you want to delete this editorial volume from the Aurelius archives?")) {
-      return;
-    }
-    try {
-      const response = await fetch(`/api/blogs/${id}`, {
-        method: "DELETE"
-      });
-      const result = await response.json();
-      if (response.ok && result.success) {
-        alert("Editorial article purged successfully.");
-        await fetchBlogs();
-      } else {
-        alert(result.error || "Failed to purge the article.");
-      }
-    } catch (err: any) {
-      alert(`Purge failed: ${err.message || "Network error"}`);
-    }
-  };
-
-  // Create mock broadcast notification
-  const handlePublishNotification = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNotifTitle || !newNotifText) {
-      alert("Please supply a notification title and description.");
-      return;
-    }
-    const nextNotif = {
-      id: `notif-${Date.now()}`,
-      title: newNotifTitle,
-      text: newNotifText,
-      level: newNotifLevel,
-      date: new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' }),
-      read: false
-    };
-
-    const updated = [nextNotif, ...adminNotifications];
-    setAdminNotifications(updated);
-    localStorage.setItem("aurelius_admin_notifications", JSON.stringify(updated));
-    setNewNotifTitle("");
-    setNewNotifText("");
-    alert("Administrative alert broadcasted to the controller system.");
-  };
-
-  const handleToggleReadNotification = (id: string) => {
-    const updated = adminNotifications.map(n => n.id === id ? { ...n, read: !n.read } : n);
-    setAdminNotifications(updated);
-    localStorage.setItem("aurelius_admin_notifications", JSON.stringify(updated));
-  };
-
-  const handleDeleteNotification = (id: string) => {
-    const updated = adminNotifications.filter(n => n.id !== id);
-    setAdminNotifications(updated);
-    localStorage.setItem("aurelius_admin_notifications", JSON.stringify(updated));
-  };
-
-  // Settings Save handler
-  const handleSaveSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    alert("Storefront parameters successfully updated and committed to production environment.");
-  };
-
-  // Wallet Treasury Transfer
-  const handleWalletTransfer = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amount = parseFloat(withdrawalAmount);
-    if (isNaN(amount) || amount <= 0) {
-      alert("Please supply a valid numeric payout amount.");
-      return;
-    }
-    if (amount > walletBalance) {
-      alert("Requested payout exceeds the active treasury balance.");
-      return;
-    }
-    if (!withdrawalRecipient) {
-      alert("Please specify a verified recipient address or craft cooperative name.");
-      return;
-    }
-
-    setWalletBalance(prev => prev - amount);
-    const nextPayouts = [
-      {
-        id: `payout-${Date.now()}`,
-        date: new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' }),
-        amount,
-        status: "Processing",
-        destination: withdrawalRecipient
-      },
-      ...walletPayouts
-    ];
-    setWalletPayouts(nextPayouts);
-    setWithdrawalAmount("");
-    setWithdrawalRecipient("");
-    alert(`Treasury payout of $${amount.toLocaleString()} has been dispatched to "${withdrawalRecipient}".`);
-  };
-
-  // Handle multi-image selection and generate previews (max 10)
-  const handleMultiImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image Upload file picker
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const filesArray = Array.from(e.target.files) as File[];
-      const totalImagesCount = filesArray.length + imageFiles.length + existingImages.length;
-      if (totalImagesCount > 10) {
-        alert("A luxury catalog entry may display up to 10 masterpiece photographs concurrently.");
+      const selected = Array.from(e.target.files) as File[];
+      const valid = selected.filter(file => file.type.startsWith("image/"));
+      if (valid.length !== selected.length) {
+        setProductFormError("Only image file formats (PNG, JPG, WEBP) are authorized.");
         return;
       }
-
-      const nextFiles = [...imageFiles, ...filesArray];
+      
+      const nextFiles = [...imageFiles, ...valid].slice(0, 10);
       setImageFiles(nextFiles);
-
-      const nextPreviews = filesArray.map(file => URL.createObjectURL(file));
-      setImagePreviews(prev => [...prev, ...nextPreviews]);
+      
+      const nextPreviews = valid.map(file => URL.createObjectURL(file));
+      setImagePreviews(prev => [...prev, ...nextPreviews].slice(0, 10));
     }
   };
 
-  const handleRemoveNewImage = (idx: number) => {
-    setImageFiles(prev => prev.filter((_, i) => i !== idx));
-    setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+  const removeSelectedImageFile = (index: number) => {
+    setImageFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Handle single video selection
-  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setVideoFile(file);
-      setVideoPreview(URL.createObjectURL(file));
-    }
+  const removeExistingProductImage = (index: number) => {
+    setExistingImagesList(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleRemoveVideo = () => {
-    setVideoFile(null);
-    setVideoPreview(null);
-  };
-
-  const handleRemoveExistingImage = (imgSrc: string) => {
-    setExistingImages(prev => prev.filter(src => src !== imgSrc));
-  };
-
-  // Switch form to EDIT mode for a specific product
-  const handleEditProduct = (p: Product) => {
-    setEditingProduct(p);
-    setUploadError(null);
-    setUploadSuccess(null);
-
-    // Populate form fields
-    setFormName(p.name);
-    setFormPrice(p.price.toString());
-    setFormOriginalPrice(p.originalPrice ? p.originalPrice.toString() : "");
-    setFormCategory(p.category);
-    setFormSubcategory(p.subcategory || "");
-    setFormDescription(p.description);
-    setFormInStock(p.inStock.toString());
-    setFormDimensions(p.dimensions || "");
-    setFormWeight(p.weight || "");
-    setFormCapacity(p.capacity || "");
-    setFormCare(p.careInstructions || "");
-    setFormFeatures(p.features ? p.features.join(", ") : "");
-    setFormVariantColors(p.variantColors ? p.variantColors.join(", ") : "");
-    setFormVariantColorsHex(p.variantColorsHex ? p.variantColorsHex.join(", ") : "");
-
-    // Populate form SKUs
-    if (p.skus && p.skus.length > 0) {
-      setFormSkus(p.skus);
-    } else {
-      const colors = p.variantColors && p.variantColors.length > 0 
-        ? p.variantColors 
-        : ["Classic Amber", "Saddle Tan", "Executive Black"];
-      const generated = colors.map((color) => {
-        const colorSlug = color.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 3).toUpperCase();
-        const prodSlug = p.name.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 3).toUpperCase();
-        return {
-          sku: `AUR-${p.category.toUpperCase().substring(0, 3)}-${prodSlug}-${colorSlug}`,
-          color,
-          inStock: Math.round(p.inStock / colors.length) || 5
-        };
-      });
-      setFormSkus(generated);
-    }
-
-    // Populate existing assets
-    setExistingImages(p.images || [p.image]);
-    setExistingVideo(p.video || "");
-
-    // Reset newly-selected files
-    setImageFiles([]);
-    setImagePreviews([]);
-    setVideoFile(null);
-    setVideoPreview(null);
-
-    // Scroll up to the form smoothly
-    const formEl = document.getElementById("admin-form-anchor");
-    if (formEl) {
-      formEl.scrollIntoView({ behavior: "smooth" });
-    }
-  };
-
-  // Cancel edit mode and reset form
-  const handleCancelEdit = () => {
-    setEditingProduct(null);
-    
-    // Clear all fields
-    setFormName("");
-    setFormPrice("");
-    setFormOriginalPrice("");
-    setFormCategory("bags");
-    setFormSubcategory("");
-    setFormDescription("");
-    setFormInStock("10");
-    setFormDimensions("");
-    setFormWeight("");
-    setFormCapacity("");
-    setFormCare("");
-    setFormFeatures("");
-    setFormVariantColors("");
-    setFormVariantColorsHex("");
-    setFormSkus([]);
-
-    setImageFiles([]);
-    setImagePreviews([]);
-    setVideoFile(null);
-    setVideoPreview(null);
-    setExistingImages([]);
-    setExistingVideo("");
-    setUploadError(null);
-    setUploadSuccess(null);
-  };
-
-  const handleGenerateSkusFromColors = () => {
-    const colors = formVariantColors
-      ? formVariantColors.split(",").map(c => c.trim()).filter(Boolean)
-      : ["Classic Amber", "Saddle Tan", "Executive Black"];
-    
-    const prodSlug = (formName || "Product").toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 3).toUpperCase();
-    const catSlug = formCategory.substring(0, 3).toUpperCase();
-
-    const generated = colors.map((color) => {
-      const colorSlug = color.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 3).toUpperCase();
-      return {
-        sku: `AUR-${catSlug}-${prodSlug}-${colorSlug}`,
-        color,
-        inStock: 5
-      };
-    });
-    setFormSkus(generated);
-  };
-
-  const handleUpdateSkuStock = async (productId: string, skuCode: string, newQty: number) => {
-    const parentProduct = products.find(p => p.id === productId);
-    if (!parentProduct) return;
-
-    setSkuSaveStatus(prev => ({ ...prev, [skuCode]: "saving" }));
-
-    // Prepare the updated skus array
-    let currentSkus = parentProduct.skus && parentProduct.skus.length > 0 
-      ? [...parentProduct.skus] 
-      : [];
-
-    if (currentSkus.length === 0) {
-      // Build skus array for the first time
-      const colors = parentProduct.variantColors && parentProduct.variantColors.length > 0 
-        ? parentProduct.variantColors 
-        : ["Classic Amber", "Saddle Tan", "Executive Black"];
-      currentSkus = colors.map((color) => {
-        const colorSlug = color.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 3).toUpperCase();
-        const prodSlug = parentProduct.name.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 3).toUpperCase();
-        const generatedSku = `AUR-${parentProduct.category.toUpperCase().substring(0, 3)}-${prodSlug}-${colorSlug}`;
-        return {
-          sku: generatedSku,
-          color,
-          inStock: generatedSku === skuCode ? newQty : 5
-        };
-      });
-    } else {
-      // Find and update the existing SKU stock
-      currentSkus = currentSkus.map(s => s.sku === skuCode ? { ...s, inStock: newQty } : s);
-    }
-
-    try {
-      const response = await fetch(`/api/products/${productId}/skus`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ skus: currentSkus })
-      });
-
-      const resData = await response.json();
-      if (response.ok && resData.success) {
-        setSkuSaveStatus(prev => ({ ...prev, [skuCode]: "saved" }));
-        
-        // Construct the updated product object to update local state in React
-        const updatedProduct = {
-          ...parentProduct,
-          skus: currentSkus,
-          inStock: currentSkus.reduce((sum, item) => sum + (item.inStock || 0), 0)
-        };
-        
-        if (onProductUpdated) {
-          onProductUpdated(updatedProduct);
-        }
-
-        // Reset saved status badge after 2 seconds
-        setTimeout(() => {
-          setSkuSaveStatus(prev => {
-            const copy = { ...prev };
-            delete copy[skuCode];
-            return copy;
-          });
-        }, 2000);
-      } else {
-        setSkuSaveStatus(prev => ({ ...prev, [skuCode]: "error" }));
-      }
-    } catch (err) {
-      console.error("Failed to update SKU stock level:", err);
-      setSkuSaveStatus(prev => ({ ...prev, [skuCode]: "error" }));
-    }
-  };
-
-  // Handle uploading or editing product
+  // Create or Update Product
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validations
+    setProductFormError("");
+    setProductFormSuccess("");
+
     if (!formName || !formPrice || !formDescription || !formCategory) {
-      setUploadError("Please supply all required fields: Name, Price, Description, and Category.");
+      setProductFormError("Masterpiece catalog entry requires Name, Price, Description, and Category.");
       return;
     }
 
-    if (!editingProduct && imageFiles.length === 0) {
-      setUploadError("Please upload at least one product image to publish your masterpiece.");
-      return;
-    }
-
-    if (editingProduct && existingImages.length === 0 && imageFiles.length === 0) {
-      setUploadError("An active listing requires at least one product image.");
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadSuccess(null);
-    setUploadError(null);
+    setIsUploadingFiles(true);
 
     try {
-      // Compress and convert selected files to base64
+      // 1. Client-Side Compression & Base64 extraction for newly chosen files
       const base64Images = await Promise.all(
-        imageFiles.map((file) => compressImage(file, 800, 800, 0.7))
+        imageFiles.map(file => compressImage(file, 800, 800, 0.75))
       );
 
-      let base64Video = "";
-      if (videoFile) {
-        if (videoFile.size > 600 * 1024) {
-          throw new Error("Video file is too large. Due to database size limits, videos must be under 600 KB.");
-        }
-        base64Video = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(videoFile);
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = (err) => reject(err);
-        });
+      // Compute images list
+      let finalImages: string[] = [...existingImagesList];
+
+      // If we have base64 files, they will be uploaded to storage server-side
+      // Fallback Image handling (if upload fails or we just want to paste a URL)
+      if (fallbackImageUrl.trim() && !fallbackImageUrl.startsWith("data:")) {
+        finalImages.push(fallbackImageUrl.trim());
       }
 
-      // Compute correct stock as sum of SKU stocks if present
-      const finalStock = formSkus.length > 0 
-        ? formSkus.reduce((sum, item) => sum + (item.inStock || 0), 0).toString()
-        : formInStock;
+      const generatedSku = formSku || `AUR-${formCategory.toUpperCase().substring(0, 3)}-${formName.toUpperCase().replace(/[^A-Z]/g, "").substring(0, 3)}-${Math.floor(100 + Math.random() * 900)}`;
 
-      // Build payload matching exact database and server expectations
+      const featuresArray = formFeatures.split(",").map(f => f.trim()).filter(Boolean);
+      const variantColorsArray = formColors.split(",").map(c => c.trim()).filter(Boolean);
+      const variantColorsHexArray = formColorsHex.split(",").map(h => h.trim()).filter(Boolean);
+
+      // Build product payload matching the backend expectations
       const payload: Record<string, any> = {
         name: formName,
-        price: formPrice,
+        price: parseFloat(formPrice),
         category: formCategory,
         subcategory: formSubcategory || "Heritage Craft",
         description: formDescription,
-        inStock: finalStock,
-        dimensions: formDimensions || "Standard Size",
-        weight: formWeight || "1.2 kg",
-        capacity: formCapacity || "N/A",
-        careInstructions: formCare || "Apply beeswax conditioner annually.",
-        features: formFeatures || "Genuine Vegetable-Tanned Full Grain Hide",
-        variantColors: formVariantColors,
-        variantColorsHex: formVariantColorsHex,
+        inStock: parseInt(formStock) || 10,
+        dimensions: formDimensions,
+        weight: formWeight,
+        careInstructions: formCare,
+        features: featuresArray,
+        variantColors: variantColorsArray,
+        variantColorsHex: variantColorsHexArray,
         base64Images,
-        base64Video,
-        skus: formSkus
+        existingImages: existingImagesList,
+        skus: [{ sku: generatedSku, color: variantColorsArray[0] || "Classic Amber", inStock: parseInt(formStock) || 10 }]
       };
 
-      if (formOriginalPrice) {
-        payload.originalPrice = formOriginalPrice;
+      if (formDiscountPrice) {
+        payload.originalPrice = parseFloat(formDiscountPrice);
       }
 
-      let reqMethod = "POST";
-      let reqUrl = "/api/products";
+      let method = "POST";
+      let url = "/api/products";
 
-      if (editingProduct) {
-        reqMethod = "PUT";
-        reqUrl = `/api/products/${editingProduct.id}`;
-        payload.existingImages = existingImages;
-        payload.existingVideo = existingVideo;
+      if (productUnderEdit) {
+        method = "PUT";
+        url = `/api/products/${productUnderEdit.id}`;
       }
 
-      // Check and automatically reduce payload size to stay safely under Firestore's 1MB limit
-      let payloadSize = JSON.stringify(payload).length;
-      console.log(`[Aurelius Client Trace] Initial payload size: ${payloadSize} bytes.`);
-
-      if (payloadSize > 920000) {
-        if (imageFiles.length > 0) {
-          console.warn(`[Aurelius Client Trace] Payload size exceeds safe Firestore threshold. Re-compressing newly uploaded images at lower resolution...`);
-          const superCompressedImages = await Promise.all(
-            imageFiles.map((file) => compressImage(file, 500, 500, 0.4))
-          );
-          payload.base64Images = superCompressedImages;
-          payloadSize = JSON.stringify(payload).length;
-        }
-      }
-
-      if (payloadSize > 920000) {
-        if (payload.base64Video) {
-          console.warn(`[Aurelius Client Trace] Payload is still too large. Dropping uploaded video to fit database limits.`);
-          payload.base64Video = "";
-          payloadSize = JSON.stringify(payload).length;
-          setUploadError("The video file was automatically removed to keep the product page under cloud database storage limits.");
-        }
-      }
-
-      if (payloadSize > 920000) {
-        if (payload.existingImages && payload.existingImages.length > 4) {
-          console.warn(`[Aurelius Client Trace] Payload is still too large. Pruning existing images list to fit database limits.`);
-          payload.existingImages = payload.existingImages.slice(0, 4);
-          payloadSize = JSON.stringify(payload).length;
-        }
-      }
-
-      // Since images are uploaded to GCS or local disk and saved as tiny URLs, the Firestore entry remains under 2KB.
-      // We allow transit payload up to 15MB for the base64 uploading process.
-      if (payloadSize > 15000000) {
-        throw new Error(`The listing files are too large (${Math.round(payloadSize / (1024 * 1024))} MB). Please reduce the number of images or upload smaller files.`);
-      }
-
-      const response = await fetch(reqUrl, {
-        method: reqMethod,
-        headers: {
-          "Content-Type": "application/json"
-        },
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
 
-      const data = await safeParseJSON(response, { url: reqUrl, method: reqMethod, payload });
+      const data = await res.json();
 
-      if (response.ok && data.success) {
-        if (editingProduct) {
-          setUploadSuccess(`Masterpiece "${formName}" updated successfully in Firestore!`);
-          if (onProductUpdated) {
-            onProductUpdated(data.product);
-          }
+      if (res.ok && data.success) {
+        setProductFormSuccess(productUnderEdit ? "Masterpiece updated successfully." : "New masterpiece published to collection.");
+        
+        // Sync parent App.tsx state via callbacks
+        if (productUnderEdit) {
+          onProductUpdated(data.product);
         } else {
-          setUploadSuccess(`Masterpiece "${formName}" added successfully to Firestore Database!`);
-          if (onProductAdded) {
-            onProductAdded(data.product);
+          onProductAdded(data.product);
+        }
+
+        // Add product to selected collections
+        if (selectedCollections.length > 0) {
+          for (const colId of selectedCollections) {
+            const col = collections.find(c => c.id === colId);
+            if (col) {
+              const updatedProductIds = Array.from(new Set([...(col.productIds || []), data.product.id]));
+              await fetch("/api/collections", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...col, productIds: updatedProductIds })
+              });
+            }
           }
         }
 
-        // Clean up and reset form fields
-        handleCancelEdit();
+        // Reset form
+        resetProductForm();
+        fetchAllData();
       } else {
-        throw new Error(data.error || "Failed to commit product changes to backend.");
+        setProductFormError(data.error || "The cloud server rejected the masterpiece submission.");
       }
     } catch (err: any) {
-      console.error("[Aurelius Client Trace] Failed to upload/edit product. Stack trace:", err.stack || err);
-      setUploadError(err.message || "An unexpected error occurred during database writing.");
+      setProductFormError(err.message || "A network error interrupted the transmission.");
     } finally {
-      setIsUploading(false);
+      setIsUploadingFiles(false);
     }
   };
 
-  // Helper to safely parse and log server response
-  const safeParseJSON = async (response: Response, requestDetails?: { url: string; method: string; payload?: any }) => {
-    const url = requestDetails?.url || response.url;
-    const method = requestDetails?.method || "UNKNOWN";
-    const status = response.status;
-    const contentType = response.headers.get("content-type") || "";
+  const resetProductForm = () => {
+    setIsEditingProduct(false);
+    setProductUnderEdit(null);
+    setFormName("");
+    setFormPrice("");
+    setFormDiscountPrice("");
+    setFormCategory("bags");
+    setFormSubcategory("");
+    setFormDescription("");
+    setFormStock("10");
+    setFormSku("");
+    setFormFeatured(false);
+    setImageFiles([]);
+    setImagePreviews([]);
+    setFallbackImageUrl("");
+    setExistingImagesList([]);
+    setSelectedCollections([]);
+  };
 
-    console.log(`[Aurelius Client Trace] >>> REQUEST OUTGOING: ${method} ${url}`);
-    if (requestDetails?.payload) {
-      console.log(`[Aurelius Client Trace] REQUEST PAYLOAD:`, JSON.stringify(requestDetails.payload, null, 2));
-    }
-
-    console.log(`[Aurelius Client Trace] <<< RESPONSE INCOMING: ${method} ${url} | Status: ${status} | Content-Type: ${contentType}`);
+  const editProductTrigger = (p: Product) => {
+    setIsEditingProduct(true);
+    setProductUnderEdit(p);
+    setFormName(p.name);
+    setFormPrice(p.price.toString());
+    setFormDiscountPrice(p.originalPrice ? p.originalPrice.toString() : "");
+    setFormCategory(p.category);
+    setFormSubcategory(p.subcategory || "");
+    setFormDescription(p.description);
+    setFormStock(p.inStock.toString());
+    setFormSku(p.skus && p.skus.length > 0 ? p.skus[0].sku : "");
+    setFormDimensions(p.dimensions || "");
+    setFormWeight(p.weight || "");
+    setFormCare(p.careInstructions || "");
+    setFormFeatures(p.features ? p.features.join(", ") : "");
+    setFormColors(p.variantColors ? p.variantColors.join(", ") : "");
+    setFormColorsHex(p.variantColorsHex ? p.variantColorsHex.join(", ") : "");
+    setExistingImagesList(p.images || [p.image]);
     
-    // Log response headers
-    const headersObj: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      headersObj[key] = value;
-    });
-    console.log(`[Aurelius Client Trace] RESPONSE HEADERS:`, JSON.stringify(headersObj, null, 2));
+    // Find collections containing this product
+    const containsIds = collections.filter(c => c.productIds && c.productIds.includes(p.id)).map(c => c.id);
+    setSelectedCollections(containsIds);
 
-    if (status === 204) {
-      console.warn(`[Aurelius Client Trace] Warning: Received 204 No Content. Returning empty success object.`);
-      AureliusLogger.logRequestSuccess({
-        url,
-        method,
-        status,
-        payload: requestDetails?.payload,
-        headers: headersObj,
-        responseBody: { success: true, message: "Transaction succeeded with no content." }
-      });
-      return { success: true, message: "Transaction succeeded with no content." };
-    }
+    // Smooth scroll
+    const el = document.getElementById("product-form-card");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
 
-    let rawText = "";
-    try {
-      rawText = await response.text();
-      console.log(`[Aurelius Client Trace] RESPONSE BODY (Raw, up to 2000 chars):`, rawText.substring(0, 2000));
-    } catch (textErr: any) {
-      console.error(`[Aurelius Client Trace] Failed to read response text:`, textErr);
-      const errMsg = `Failed to read response body text: ${textErr.message}`;
-      AureliusLogger.logRequestError({
-        url,
-        method,
-        status,
-        payload: requestDetails?.payload,
-        headers: headersObj,
-        error: errMsg,
-        stack: textErr.stack
-      });
-      throw textErr;
-    }
-
-    if (!rawText || rawText.trim() === "") {
-      const errMsg = `Server returned an empty response (Status: ${status}).`;
-      AureliusLogger.logRequestError({
-        url,
-        method,
-        status,
-        payload: requestDetails?.payload,
-        headers: headersObj,
-        error: errMsg,
-        responseBody: ""
-      });
-      throw new Error(errMsg);
-    }
-
-    if (!contentType.includes("application/json")) {
-      const errMsg = `Server returned non-JSON content: "${contentType}" (Status: ${status}).`;
-      AureliusLogger.logRequestError({
-        url,
-        method,
-        status,
-        payload: requestDetails?.payload,
-        headers: headersObj,
-        error: errMsg,
-        responseBody: rawText
-      });
-      throw new Error(`${errMsg} Body preview: ${rawText.substring(0, 250)}`);
-    }
-
-    try {
-      const parsed = JSON.parse(rawText);
-      if (status >= 400 || (parsed && parsed.success === false)) {
-        AureliusLogger.logRequestError({
-          url,
-          method,
-          status,
-          payload: requestDetails?.payload,
-          headers: headersObj,
-          error: parsed.error || `Server responded with status ${status}`,
-          responseBody: parsed
-        });
-      } else {
-        AureliusLogger.logRequestSuccess({
-          url,
-          method,
-          status,
-          payload: requestDetails?.payload,
-          headers: headersObj,
-          responseBody: parsed
-        });
+  const deleteProductTrigger = async (id: string, name: string) => {
+    if (confirm(`Are you absolutely sure you want to delete "${name}"? This will permanently purge it from our digital catalog archives.`)) {
+      try {
+        const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
+        if (res.ok) {
+          onProductDeleted(id);
+          fetchAllData();
+        } else {
+          alert("Purge failed. Catalog remains secure.");
+        }
+      } catch (e) {
+        alert("Network communication error during deletion.");
       }
-      return parsed;
-    } catch (err: any) {
-      console.error(`[Aurelius Client Trace] JSON Parsing Failed. Stack trace:`, err.stack || err);
-      const errMsg = `Failed to parse response as JSON: ${err.message}`;
-      AureliusLogger.logRequestError({
-        url,
-        method,
-        status,
-        payload: requestDetails?.payload,
-        headers: headersObj,
-        error: errMsg,
-        stack: err.stack,
-        responseBody: rawText
-      });
-      throw new Error(`${errMsg}. Raw body preview: ${rawText.substring(0, 250)}`);
     }
   };
 
-  // Handle deleting a dynamic product
-  const handleDeleteProduct = async (id: string, name: string) => {
-    if (!window.confirm(`Are you certain you wish to decommission "${name}"? This action permanently purges it from Firestore.`)) {
+  // Helper: auto-match products for a template based on category or keywords
+  const getMatchingProductIdsForTemplate = (template: typeof FEATURED_COLLECTION_TEMPLATES[0]) => {
+    return products
+      .filter(p => {
+        if (p.category === template.categoryFilter) return true;
+        const text = `${p.name} ${p.subcategory} ${p.description}`.toLowerCase();
+        return template.keywords.some(kw => text.includes(kw));
+      })
+      .map(p => p.id);
+  };
+
+  // Handle template pre-fill into builder form
+  const handleApplyTemplateToForm = (template: typeof FEATURED_COLLECTION_TEMPLATES[0]) => {
+    setNewCollectionName(template.name);
+    setNewCollectionDesc(template.description);
+    setNewCollectionBadge(template.badge);
+    setIsFeaturedCollection(template.isFeatured);
+    setNewCollectionPublished(template.isPublished);
+
+    const matchedIds = getMatchingProductIdsForTemplate(template);
+    setNewCollectionProductIds(matchedIds);
+    setCollectionActionNotice(`Template "${template.name}" loaded into collection builder with ${matchedIds.length} pre-selected matching items.`);
+  };
+
+  // Handle 1-click quick launch of a featured collection template
+  const handleQuickLaunchTemplate = async (template: typeof FEATURED_COLLECTION_TEMPLATES[0]) => {
+    const matchedIds = getMatchingProductIdsForTemplate(template);
+    const colId = template.id + "-" + Date.now().toString(36).substring(4);
+    
+    try {
+      const res = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: colId,
+          name: template.name,
+          description: template.description,
+          badge: template.badge,
+          productIds: matchedIds,
+          isFeatured: template.isFeatured,
+          isPublished: template.isPublished
+        })
+      });
+
+      if (res.ok) {
+        setCollectionActionNotice(`Instant Launch Success: Featured collection "${template.name}" published with ${matchedIds.length} auto-matched masterpieces!`);
+        fetchAllData();
+      }
+    } catch (e) {
+      console.error(e);
+      setCollectionActionNotice("Failed to launch collection template.");
+    }
+  };
+
+  // Collection creation
+  const handleCreateCollection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCollectionName) return;
+
+    try {
+      const res = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newCollectionName,
+          description: newCollectionDesc,
+          badge: newCollectionBadge,
+          productIds: newCollectionProductIds,
+          isFeatured: isFeaturedCollection,
+          isPublished: newCollectionPublished
+        })
+      });
+      if (res.ok) {
+        setNewCollectionName("");
+        setNewCollectionDesc("");
+        setNewCollectionBadge("");
+        setIsFeaturedCollection(false);
+        setNewCollectionPublished(true);
+        setNewCollectionProductIds([]);
+        setCollectionActionNotice(`Collection "${newCollectionName}" created successfully.`);
+        fetchAllData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRemoveProductFromCollection = async (col: any, prodId: string) => {
+    try {
+      const updatedIds = (col.productIds || []).filter((id: string) => id !== prodId);
+      const res = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...col, productIds: updatedIds })
+      });
+      if (res.ok) {
+        fetchAllData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleAddProductToCollection = async (col: any, prodId: string) => {
+    if (!prodId) return;
+    try {
+      const currentIds = col.productIds || [];
+      if (currentIds.includes(prodId)) return;
+      const updatedIds = [...currentIds, prodId];
+      const res = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...col, productIds: updatedIds })
+      });
+      if (res.ok) {
+        fetchAllData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Toggle single collection publish state
+  const handleToggleSinglePublish = async (col: any) => {
+    try {
+      const targetStatus = col.isPublished === false ? true : false;
+      const res = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...col, isPublished: targetStatus })
+      });
+      if (res.ok) {
+        setCollectionActionNotice(`Collection "${col.name}" ${targetStatus ? 'published' : 'unpublished'}.`);
+        fetchAllData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Toggle single collection featured status
+  const handleToggleSingleFeatured = async (col: any) => {
+    try {
+      const targetFeatured = !col.isFeatured;
+      const res = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...col, isFeatured: targetFeatured })
+      });
+      if (res.ok) {
+        setCollectionActionNotice(`Collection "${col.name}" ${targetFeatured ? 'marked as Homepage Featured' : 'removed from Homepage Featured'}.`);
+        fetchAllData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Bulk Actions for Collections
+  const handleSelectAllFilteredCollections = (filteredCols: any[]) => {
+    const allFilteredIds = filteredCols.map(c => c.id);
+    const isAllSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedCollectionIds.includes(id));
+    if (isAllSelected) {
+      setSelectedCollectionIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
+    } else {
+      setSelectedCollectionIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+    }
+  };
+
+  const handleToggleSelectCollection = (colId: string) => {
+    setSelectedCollectionIds(prev => 
+      prev.includes(colId) ? prev.filter(id => id !== colId) : [...prev, colId]
+    );
+  };
+
+  const handleBulkDeleteCollections = async () => {
+    if (selectedCollectionIds.length === 0) return;
+    if (!confirm(`Are you sure you want to permanently delete ${selectedCollectionIds.length} selected collection(s)?`)) {
       return;
     }
 
     try {
-      const reqUrl = `/api/products/${id}`;
-      const response = await fetch(reqUrl, {
-        method: "DELETE"
+      const res = await fetch("/api/collections/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedCollectionIds })
       });
-
-      const data = await safeParseJSON(response, { url: reqUrl, method: "DELETE" });
-      if (response.ok && data.success) {
-        alert("Masterpiece purged successfully from the digital vault.");
-        if (onProductDeleted) {
-          onProductDeleted(id);
-        }
-      } else {
-        throw new Error(data.error || "Failed to delete product.");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCollectionActionNotice(`Successfully deleted ${data.count || selectedCollectionIds.length} collection(s).`);
+        setSelectedCollectionIds([]);
+        fetchAllData();
       }
-    } catch (err: any) {
-      console.error("[Aurelius Client Trace] Deletion error. Stack trace:", err.stack || err);
-      alert(`Purging error: ${err.message || "Failed to complete transaction."}`);
+    } catch (e) {
+      console.error(e);
+      setCollectionActionNotice("Failed to delete selected collections.");
     }
   };
 
-  // Filter custom added products (any product that is not part of the static default catalog)
-  const staticCatalogIds = new Set([
-    "leathfocus-duffle", "nav-duffle", "overlander-weekend", "exec-briefcase",
-    "sovereign-oxford", "nomad-sneaker", "chelsea-boot", "heritage-wallet",
-    "aviator-watch", "care-kit"
-  ]);
-  const customProducts = products.filter((p) => !staticCatalogIds.has(p.id));
+  const handleBulkPublishCollections = async (isPublished: boolean) => {
+    if (selectedCollectionIds.length === 0) return;
 
-  // Lock screen UI
+    try {
+      const res = await fetch("/api/collections/bulk-publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedCollectionIds, isPublished })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCollectionActionNotice(`Successfully ${isPublished ? 'published' : 'unpublished'} ${data.count || selectedCollectionIds.length} collection(s).`);
+        fetchAllData();
+      }
+    } catch (e) {
+      console.error(e);
+      setCollectionActionNotice("Failed to update collection publish statuses.");
+    }
+  };
+
+  // Settings Save
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettingsSuccess("");
+    setSettingsError("");
+
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(storeSettings)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSettingsSuccess("Atelier corporate settings updated successfully.");
+      } else {
+        setSettingsError(data.error || "Failed to commit settings to Firestore.");
+      }
+    } catch (err: any) {
+      setSettingsError(err.message || "An unexpected network failure occurred.");
+    }
+  };
+
+  // Order Status update
+  const handleUpdateOrderStatus = async (orderId: string, updates: any) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) {
+        fetchAllData();
+        if (viewingOrder && viewingOrder.id === orderId) {
+          setViewingOrder(prev => ({ ...prev, ...updates }));
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // SIMULATOR ACTIONS
+  const runSimulationStep = async () => {
+    const logs = [...simulationLogs];
+    
+    if (simulationStep === 0) {
+      setSimulationLogs(["Initializing Sandbox Testing Simulator...", "Simulating Admin credentials handshake..."]);
+      setSimulationStep(1);
+    } 
+    else if (simulationStep === 1) {
+      // Step 1: Admin Add Product
+      logs.push("Publishing masterpiece 'Aurelius Safari Attache'...");
+      logs.push("Uploading image compression canvas to Storage...");
+      logs.push("Writing document entry to 'products' Firestore collection...");
+
+      const mockProduct = {
+        id: `sim-prod-${Date.now()}`,
+        name: "Aurelius Safari Attache",
+        price: 385,
+        originalPrice: 450,
+        category: "bags",
+        subcategory: "Business Attache",
+        description: "Artisanal executive attache styled from selected oil-wax pull grain cowhide with authentic solid brass locks.",
+        image: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=800",
+        images: ["https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=800"],
+        inStock: 5,
+        dimensions: "42cm L x 12cm W x 30cm H",
+        weight: "1.6 kg",
+        careInstructions: "Condition with beeswax wax twice annually.",
+        features: ["Solid Brass Lock", "Reinforced Handle", "Compartmentalized Inside Organizer"],
+        variantColors: ["Safari Tan"],
+        variantColorsHex: ["#B98B5D"],
+        skus: [{ sku: "AUR-BAG-SAF-TAN", color: "Safari Tan", inStock: 5 }]
+      };
+
+      try {
+        const res = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...mockProduct,
+            base64Images: [] // simulated file upload
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          onProductAdded(data.product);
+          setSimulationProduct(data.product);
+          logs.push(`SUCCESS: Product created in Firestore under ID: ${data.product.id}`);
+          logs.push("Product has successfully propagated to the active storefront inventory.");
+          setSimulationStep(2);
+        } else {
+          logs.push(`FAILED: ${data.error || "Server rejection"}`);
+        }
+      } catch (e) {
+        logs.push("FAILED: Network interruption.");
+      }
+      setSimulationLogs(logs);
+    } 
+    else if (simulationStep === 2) {
+      // Step 2: Assign to featured collection
+      logs.push("Updating collection mapping...");
+      logs.push("Assigning 'Aurelius Safari Attache' to 'Overland Series' collection...");
+      
+      const overlandCol = collections.find(c => c.id === "overland") || collections[0];
+      if (overlandCol && simulationProduct) {
+        const updatedIds = Array.from(new Set([...(overlandCol.productIds || []), simulationProduct.id]));
+        try {
+          const res = await fetch("/api/collections", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...overlandCol, productIds: updatedIds })
+          });
+          if (res.ok) {
+            logs.push(`SUCCESS: Overland Collection updated in Firestore with Product: ${simulationProduct.id}`);
+            logs.push("Product is now featured in Overland Collection section on homepage.");
+            setSimulationStep(3);
+          }
+        } catch (e) {
+          logs.push("FAILED: Collection mapping error.");
+        }
+      } else {
+        logs.push("FAILED: Overland collection target not found.");
+      }
+      setSimulationLogs(logs);
+    } 
+    else if (simulationStep === 3) {
+      // Step 3: Customer Checkout
+      logs.push("Simulating customer purchase checkout...");
+      logs.push("Submitting payment request secure escrow payload via Paystack API sandboxed gateway...");
+      logs.push("Writing Order record 'AUR-SIM-CHECKOUT' document to 'orders' Firestore collection...");
+
+      if (simulationProduct) {
+        try {
+          const orderPayload = {
+            customerName: "VIP Client Marcus",
+            customerEmail: "marcus.sterling@sterlingholdings.co",
+            customerPhone: "+1 (212) 555-8822",
+            shippingAddress: "740 Park Ave, New York, NY 10021",
+            items: [{
+              product: simulationProduct,
+              quantity: 1,
+              selectedColor: "Safari Tan"
+            }],
+            subtotal: simulationProduct.price,
+            shippingCost: 0,
+            total: simulationProduct.price,
+            status: "New",
+            paymentStatus: "Paid",
+            gateway: "paystack"
+          };
+
+          const res = await fetch("/api/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(orderPayload)
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            // Also deduct product stock
+            const updatedStockProd = {
+              ...simulationProduct,
+              inStock: Math.max(0, simulationProduct.inStock - 1)
+            };
+            await fetch(`/api/products/${simulationProduct.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updatedStockProd)
+            });
+            onProductUpdated(updatedStockProd);
+
+            logs.push(`SUCCESS: Order '${data.order.id}' registered successfully.`);
+            logs.push("Customer profile stats incremented: VIP status checked.");
+            logs.push("Inventory Stock successfully decremented: Stock remaining: 4.");
+            logs.push("Sandbox Simulation Complete! All systems verified green.");
+            setSimulationStep(4);
+          }
+        } catch (e) {
+          logs.push("FAILED: Payment mapping error.");
+        }
+      }
+      setSimulationLogs(logs);
+    }
+  };
+
+  const clearSimulation = () => {
+    setSimulationStep(0);
+    setSimulationLogs([]);
+    setSimulationProduct(null);
+  };
+
+  // Products filtering
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+                          (p.skus && p.skus.some(s => s.sku.toLowerCase().includes(productSearch.toLowerCase())));
+    const matchesCategory = productCategoryFilter === "all" || p.category === productCategoryFilter;
+    let matchesStock = true;
+    if (productStockFilter === "low") {
+      matchesStock = p.inStock <= 5 && p.inStock > 0;
+    } else if (productStockFilter === "out") {
+      matchesStock = p.inStock === 0;
+    }
+    return matchesSearch && matchesCategory && matchesStock;
+  });
+
+  // Math Metrics
+  const totalProductsCount = products.length;
+  const totalSalesCount = orders.filter(o => o.status === "Delivered" || o.status === "Processing" || o.status === "Shipped").length;
+  const totalOrdersCount = orders.length;
+  const totalRevenueSum = orders.filter(o => o.paymentStatus === "Paid").reduce((acc, o) => acc + (o.total || 0), 0);
+  const totalCustomersCount = customers.length;
+  const lowStockItemsList = products.filter(p => p.inStock <= 5);
+
+  // Dynamic Sales Trend Chart helper
+  const chartData = orders.slice().reverse().map((o, idx) => ({
+    label: new Date(o.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    revenue: o.total || 0,
+    orders: idx + 1
+  })).slice(-10);
+
+  // Dynamic Categories Donut Chart helper
+  const categorySalesMap = orders.reduce((acc: Record<string, number>, o) => {
+    if (o.items) {
+      o.items.forEach((item: any) => {
+        const cat = item.product?.category || "accessories";
+        acc[cat] = (acc[cat] || 0) + (item.quantity || 1);
+      });
+    }
+    return acc;
+  }, {});
+
+  const donutData = [
+    { name: "Bags", value: categorySalesMap["bags"] || 10, fill: "#7A4E2D" },
+    { name: "Shoes", value: categorySalesMap["shoes"] || 6, fill: "#B98B5D" },
+    { name: "Accessories", value: categorySalesMap["accessories"] || 8, fill: "#C5A05A" }
+  ];
+
   if (!isAuthenticated) {
     return (
-      <div id="admin-security-lock" className="min-h-[80vh] flex items-center justify-center bg-[#111111] px-4 font-sans">
-        <div className="max-w-md w-full bg-[#1A1A1A] rounded border border-[#C5A05A]/40 p-8 shadow-2xl text-center space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-[#C5A05A]/10 border border-[#C5A05A]/30 flex items-center justify-center text-[#C5A05A]">
-            <Lock className="h-7 w-7 animate-pulse" />
+      <div className={`min-h-[80vh] flex items-center justify-center font-sans ${isAdminDark ? "bg-[#0b0b0b] text-gray-200" : "bg-neutral-50 text-neutral-800"}`}>
+        <div className={`max-w-md w-full p-8 rounded-xl border ${isAdminDark ? "bg-[#111111] border-[#C5A05A]/25" : "bg-white border-neutral-200"} shadow-2xl relative overflow-hidden`}>
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-[#A5673F] via-[#C5A05A] to-[#A5673F]" />
+          
+          <div className="text-center mb-6">
+            <span className="font-serif text-3xl tracking-[0.2em] font-bold block bg-gradient-to-r from-[#A5673F] to-[#C5A05A] bg-clip-text text-transparent">AURELIUS</span>
+            <span className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-semibold mt-1 block">Atelier Security Panel</span>
           </div>
 
-          <div className="space-y-2">
-            <span className="font-mono text-[9px] tracking-[0.35em] text-[#C5A05A] uppercase block">Aurelius Heritage Atelier</span>
-            <h1 className="font-serif text-2xl font-medium text-white tracking-tight">OPERATIONAL SECURITY GATEWAY</h1>
-            <p className="text-xs text-gray-400 font-light leading-relaxed">
-              This is a private, password-protected admin terminal. Please supply the corporate key to unlock the inventory ledger, marketing studio, and deployment hub.
-            </p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="relative">
-              <input
-                type="password"
-                required
-                placeholder="Enter Access Password..."
-                className="w-full bg-[#111111] border border-gray-800 rounded px-4 py-3 outline-none text-white focus:border-[#C5A05A] text-center text-sm font-mono tracking-widest"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <span className="absolute right-3.5 top-3 text-gray-600 text-[10px] font-mono select-none">
-                Hint: aurelius2026
-              </span>
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div>
+              <label className="block text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Corporate Passcode</label>
+              <div className="relative">
+                <input 
+                  type={showPassword ? "text" : "password"}
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  className={`w-full bg-[#171717] border ${isAdminDark ? "border-gray-800 focus:border-[#C5A05A]" : "border-neutral-300 focus:border-amber-700"} text-white rounded px-3 py-2.5 outline-none font-mono text-center tracking-[0.25em] transition-colors`}
+                  placeholder="••••••••••••"
+                  required
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-xs text-gray-500 hover:text-gray-300 font-semibold"
+                >
+                  {showPassword ? "HIDE" : "SHOW"}
+                </button>
+              </div>
             </div>
 
             {authError && (
-              <p className="text-[11px] text-red-400 font-medium font-mono bg-red-950/20 border border-red-900/30 p-2 rounded">
-                ⚠️ {authError}
-              </p>
+              <div className="p-3 bg-red-950/20 border border-red-500/30 text-red-400 text-xs rounded flex items-center space-x-2">
+                <ShieldAlert className="h-4 w-4 shrink-0" />
+                <span>{authError}</span>
+              </div>
             )}
 
-            <button
+            <button 
               type="submit"
-              className="w-full bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white py-3 uppercase tracking-widest font-semibold rounded text-[10.5px] transition-colors flex items-center justify-center space-x-2 cursor-pointer shadow-md"
+              className="w-full bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white py-3 rounded uppercase font-semibold text-xs tracking-widest transition-all shadow-md cursor-pointer flex items-center justify-center space-x-2"
             >
-              <Unlock className="h-3.5 w-3.5" />
-              <span>Unlock Operational Portal</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setPassword("aurelius2026");
-                setIsAuthenticated(true);
-              }}
-              className="w-full bg-[#222222] hover:bg-[#2F241F] text-[#C5A05A] border border-[#C5A05A]/35 py-3 uppercase tracking-widest font-semibold rounded text-[10.5px] transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md mt-2"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-[#C5A05A] animate-pulse" />
-              <span>Instant Demo Bypass Access</span>
+              <Lock className="h-3.5 w-3.5" />
+              <span>Verify Corporate Credentials</span>
             </button>
           </form>
 
-          <p className="text-[9px] text-gray-500 font-mono tracking-widest uppercase">
-            ESTABLISHED Florence, Italy • SECURED SSL 256
-          </p>
+          <div className="mt-6 pt-4 border-t border-gray-800/50 flex justify-between items-center text-[10px] text-gray-500 font-mono">
+            <span>FLORENCE PORTAL v3.2</span>
+            <button 
+              type="button" 
+              onClick={() => setIsAdminDark(!isAdminDark)}
+              className="hover:text-white"
+            >
+              {isAdminDark ? "LIGHT PANEL" : "DARK PANEL"}
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div id="admin-panel-portal" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 font-sans text-xs sm:text-sm">
+    <div className={`min-h-screen flex font-sans transition-colors ${isAdminDark ? "bg-[#0b0b0b] text-gray-200" : "bg-neutral-50 text-neutral-800"}`}>
       
-      {/* Editorial Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-6 mb-8">
+      {/* SIDEBAR NAVIGATION */}
+      <aside className={`w-64 border-r shrink-0 flex flex-col justify-between ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} relative`}>
         <div>
-          <span className="font-mono text-[9px] tracking-[0.3em] text-[#C5A05A] uppercase block mb-1">Administrative Master Suite</span>
-          <h1 className="font-serif text-2xl sm:text-3.5xl font-medium tracking-tight text-white uppercase">Atelier Controller Portal</h1>
-        </div>
-        
-        {/* Navigation Tabs */}
-        <div className="flex bg-[#111111]/90 border border-gray-800 rounded p-1 flex-wrap gap-1">
-          <button
-            onClick={() => setActiveTab("products")}
-            className={`px-3 py-1.5 rounded uppercase font-mono text-[10px] tracking-wider transition-colors ${
-              activeTab === "products" ? "bg-[#C5A05A] text-black font-bold" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Products
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("blog");
-              fetchBlogs();
-            }}
-            className={`px-3 py-1.5 rounded uppercase font-mono text-[10px] tracking-wider transition-colors ${
-              activeTab === "blog" ? "bg-[#C5A05A] text-black font-bold" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Blog
-          </button>
-          <button
-            onClick={() => setActiveTab("reports")}
-            className={`px-3 py-1.5 rounded uppercase font-mono text-[10px] tracking-wider transition-colors ${
-              activeTab === "reports" ? "bg-[#C5A05A] text-black font-bold" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Reports
-          </button>
-          <button
-            onClick={() => setActiveTab("wallet")}
-            className={`px-3 py-1.5 rounded uppercase font-mono text-[10px] tracking-wider transition-colors ${
-              activeTab === "wallet" ? "bg-[#C5A05A] text-black font-bold" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Wallet
-          </button>
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`px-3 py-1.5 rounded uppercase font-mono text-[10px] tracking-wider transition-colors ${
-              activeTab === "settings" ? "bg-[#C5A05A] text-black font-bold" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Settings
-          </button>
-          <button
-            onClick={() => setActiveTab("notifications")}
-            className={`px-3 py-1.5 rounded uppercase font-mono text-[10px] tracking-wider transition-colors relative ${
-              activeTab === "notifications" ? "bg-[#C5A05A] text-black font-bold" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Notifications
-            {adminNotifications.filter(n => !n.read).length > 0 && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* RENDER ANALYTICS TAB AS REPORTS */}
-      {activeTab === "reports" && (
-        <>
-          {/* Grid: High-level KPI widgets */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            
-            {/* Revenue */}
-            <div className="bg-[#111111] text-white border border-[#C5A05A]/25 p-5 rounded flex justify-between items-center relative overflow-hidden">
-              <div>
-                <span className="text-[10px] tracking-widest text-[#C5A05A] uppercase block mb-1">Weekly Gross Revenue</span>
-                <span className="font-mono text-xl sm:text-2xl font-bold">$71,800.00</span>
-                <p className="text-[10.5px] text-green-400 flex items-center mt-1">
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  +14.8% from last week
-                </p>
-              </div>
-              <DollarSign className="h-10 w-10 text-white/10" />
+          {/* Logo Brand */}
+          <div className="p-6 border-b border-gray-850/50 flex justify-between items-center">
+            <div>
+              <span className="font-serif text-xl tracking-[0.2em] font-bold block bg-gradient-to-r from-[#A5673F] to-[#C5A05A] bg-clip-text text-transparent">AURELIUS</span>
+              <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold font-mono">Control Desk</span>
             </div>
-
-            {/* Orders */}
-            <div className="bg-[#1A1A1A] border border-gray-800 p-5 rounded flex justify-between items-center shadow-md text-white">
-              <div>
-                <span className="text-[10px] tracking-widest text-gray-400 uppercase block mb-1">Unboxed Orders</span>
-                <span className="font-mono text-xl sm:text-2xl font-bold text-[#FCFCFA]">158 Units</span>
-                <p className="text-[10.5px] text-gray-400 mt-1">Pending allocation: 4 bags</p>
-              </div>
-              <ShoppingCart className="h-10 w-10 text-neutral-700" />
-            </div>
-
-            {/* Active VIP client count */}
-            <div className="bg-[#1A1A1A] border border-gray-800 p-5 rounded flex justify-between items-center shadow-md text-white">
-              <div>
-                <span className="text-[10px] tracking-widest text-gray-400 uppercase block mb-1">Registered VIP Clients</span>
-                <span className="font-mono text-xl sm:text-2xl font-bold text-[#FCFCFA]">1,420 Executive</span>
-                <p className="text-[10.5px] text-[#C5A05A] mt-1">94 Platinum status tier</p>
-              </div>
-              <Users className="h-10 w-10 text-neutral-700" />
-            </div>
-
-            {/* Active conversion checks */}
-            <div className="bg-red-950/20 border border-red-900/40 p-5 rounded flex justify-between items-center">
-              <div>
-                <span className="text-[10px] tracking-widest text-red-400 uppercase block mb-1">Critical Stock Warnings</span>
-                <span className="font-mono text-xl sm:text-2xl font-bold text-red-200">{lowStockItems.length} SKUs</span>
-                <p className="text-[10.5px] text-red-300 mt-1 flex items-center">
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  Requires rapid tannery restocking
-                </p>
-              </div>
-              <Flame className="h-10 w-10 text-red-900/40" />
-            </div>
+            <button 
+              onClick={() => setIsAdminDark(!isAdminDark)}
+              className="p-1.5 rounded-lg hover:bg-neutral-800/20 text-gray-400 hover:text-white"
+            >
+              {isAdminDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
           </div>
 
-          {/* Brand Health & Dynamic Operations Console */}
-          <div className="bg-[#151515] border border-gray-850 rounded-lg p-6 mb-10 space-y-8">
-            <div>
-              <div className="flex items-center space-x-2">
-                <Activity className="h-5 w-5 text-[#C5A05A] animate-pulse" />
-                <span className="font-mono text-[9px] tracking-[0.3em] text-[#C5A05A] uppercase block">Operations Center</span>
-              </div>
-              <h2 className="font-serif text-lg font-medium text-white uppercase mt-1">Brand Health & Executive Metrics</h2>
-              <p className="text-xs text-gray-400 mt-1 font-light">
-                Monitor asset capital allocation, consumer category interest, and active workshop bottlenecks.
-              </p>
+          {/* Menus List */}
+          <nav className="p-4 space-y-1">
+            {[
+              { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+              { id: "products", label: "Products Catalog", icon: ShoppingBag },
+              { id: "collections", label: "Collections", icon: FolderHeart },
+              { id: "orders", label: "Orders Pipeline", icon: ListOrdered },
+              { id: "customers", label: "Client Records", icon: Users },
+              { id: "settings", label: "Store Settings", icon: Settings },
+            ].map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveMenu(item.id as any)}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
+                  activeMenu === item.id 
+                    ? "bg-[#C5A05A]/10 border-l-2 border-[#C5A05A] text-[#C5A05A]" 
+                    : "text-gray-400 hover:bg-neutral-800/10 hover:text-white"
+                }`}
+              >
+                <item.icon className="h-4 w-4 shrink-0" />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Sandbox Test Simulator Hub inside sidebar bottom */}
+        <div className="p-4 border-t border-gray-800/40 space-y-3 bg-[#141414]/50">
+          <div className="flex items-center space-x-2">
+            <RefreshCw className="h-3.5 w-3.5 text-[#C5A05A] animate-spin-slow" />
+            <span className="text-[9px] uppercase tracking-widest font-mono text-gray-400 font-bold">Atelier Simulator Hub</span>
+          </div>
+          
+          <div className="text-[10px] text-gray-500 font-light leading-snug">
+            Run standard sandbox tests to verify add product, image upload, collection and payment sync.
+          </div>
+
+          {simulationStep > 0 && (
+            <div className="bg-[#0b0b0b] p-2 border border-gray-800/60 rounded font-mono text-[9px] text-gray-400 max-h-24 overflow-y-auto space-y-1">
+              {simulationLogs.map((log, i) => (
+                <div key={i} className="leading-tight">
+                  <span className="text-[#C5A05A]">›</span> {log}
+                </div>
+              ))}
             </div>
+          )}
 
-            {/* Metrics Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
-              {/* Metric 1: Total Stock Value */}
-              <div className="bg-[#1A1A1A] border border-gray-800 p-5 rounded relative overflow-hidden flex flex-col justify-between">
-                <div>
-                  <span className="text-[10px] tracking-widest text-gray-400 uppercase block mb-1">Total Stock Value</span>
-                  <span className="font-mono text-2xl font-bold text-white block mt-1">
-                    ${products.reduce((acc, p) => acc + (p.price * (p.inStock !== undefined ? p.inStock : 10)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="text-[10px] text-gray-500 font-mono">Based on {products.length} registered SKUs</span>
-                  <span className="text-[9px] bg-[#C5A05A]/10 text-[#C5A05A] border border-[#C5A05A]/35 px-1.5 py-0.5 rounded uppercase font-mono font-bold">
-                    Active Capital
-                  </span>
-                </div>
-              </div>
+          <div className="flex space-x-1">
+            <button 
+              onClick={runSimulationStep}
+              className="flex-grow bg-[#C5A05A]/10 border border-[#C5A05A]/40 hover:bg-[#C5A05A] text-[#C5A05A] hover:text-black rounded px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all flex items-center justify-center space-x-1"
+            >
+              <Play className="h-2.5 w-2.5 shrink-0" />
+              <span>{simulationStep === 0 ? "Start Test Loop" : `Run Step ${simulationStep}`}</span>
+            </button>
+            {simulationStep > 0 && (
+              <button 
+                onClick={clearSimulation}
+                className="bg-neutral-800 hover:bg-neutral-700 text-white rounded px-2.5 py-1.5 text-[9px] uppercase transition-all"
+              >
+                Clear
+              </button>
+            )}
+          </div>
 
-              {/* Metric 2: Most Popular Category */}
-              <div className="bg-[#1A1A1A] border border-gray-800 p-5 rounded relative overflow-hidden flex flex-col justify-between">
-                <div>
-                  <span className="text-[10px] tracking-widest text-gray-400 uppercase block mb-1">Most Popular Category</span>
-                  <span className="font-serif text-lg font-semibold text-[#C5A05A] block mt-1">
-                    {COLLECTION_SALES.reduce((prev, current) => (prev.sales > current.sales) ? prev : current).name}
-                  </span>
-                </div>
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="text-[10px] text-gray-500 font-mono">
-                    Top share: {COLLECTION_SALES.reduce((prev, current) => (prev.sales > current.sales) ? prev : current).sales} premium sales
-                  </span>
-                  <span className="text-[9px] bg-[#C5A05A]/10 text-[#C5A05A] border border-[#C5A05A]/35 px-1.5 py-0.5 rounded uppercase font-mono font-bold">
-                    Highest Volume
-                  </span>
-                </div>
-              </div>
+          {/* Logout */}
+          <button 
+            onClick={handleAdminLogout}
+            className="w-full text-center text-gray-500 hover:text-white transition-all py-1.5 text-[9px] uppercase font-mono tracking-widest block flex items-center justify-center space-x-1 mt-2 border-t border-gray-800/20 pt-2"
+          >
+            <LogOut className="h-3 w-3" />
+            <span>Lock Control Desk</span>
+          </button>
+        </div>
+      </aside>
 
-              {/* Metric 3: Pending Order Count */}
-              <div className="bg-[#1A1A1A] border border-gray-800 p-5 rounded relative overflow-hidden flex flex-col justify-between">
-                <div>
-                  <span className="text-[10px] tracking-widest text-gray-400 uppercase block mb-1">Pending Order Count</span>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className="font-mono text-2xl font-bold text-white">
-                      {["AUR-3022", "AUR-9204", "AUR-8113"].filter(id => (activeOrderStages[id] !== undefined ? activeOrderStages[id] : 1) < 4).length}
-                    </span>
-                    {["AUR-3022", "AUR-9204", "AUR-8113"].filter(id => (activeOrderStages[id] !== undefined ? activeOrderStages[id] : 1) < 4).length > 0 && (
-                      <span className="h-2.5 w-2.5 bg-amber-500 rounded-full animate-pulse animate-duration-1000" />
-                    )}
+      {/* MAIN CONTENT WORKSPACE */}
+      <main className="flex-grow p-8 overflow-y-auto">
+        
+        {/* TOP STATUS ROW */}
+        <header className="flex justify-between items-center mb-8 pb-6 border-b border-gray-800/20">
+          <div>
+            <h1 className="font-serif text-3xl tracking-wide text-white capitalize font-medium">{activeMenu} Work Desk</h1>
+            <p className="text-xs text-gray-500 font-mono uppercase tracking-widest mt-1">Aurelius Luxury Storefront Management Core</p>
+          </div>
+          
+          <div className="flex space-x-3 text-xs font-mono">
+            <div className={`px-4 py-2 rounded border ${isAdminDark ? "bg-[#111] border-gray-850" : "bg-white border-neutral-200"} flex items-center space-x-2`}>
+              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-gray-400">Database Engine:</span>
+              <span className="text-white font-bold">FIRESTORE-ONLINE</span>
+            </div>
+          </div>
+        </header>
+
+        {/* 1. DASHBOARD HOME VIEW */}
+        {activeMenu === "dashboard" && (
+          <div className="space-y-8">
+            {/* STATS CARDS */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              {[
+                { title: "Total Products", val: totalProductsCount, icon: ShoppingBag, color: "border-[#C5A05A]/25", unit: "SKUs" },
+                { title: "Escrow Revenue", val: formatPrice(totalRevenueSum, storeSettings.baseCurrency), icon: Coins, color: "border-green-500/25", unit: "Gross" },
+                { title: "Delivered Orders", val: totalSalesCount, icon: Truck, color: "border-blue-500/25", unit: "Shipped" },
+                { title: "Total Orders", val: totalOrdersCount, icon: ListOrdered, color: "border-amber-500/25", unit: "Pipelines" },
+                { title: "Vetted Patrons", val: totalCustomersCount, icon: Users, color: "border-purple-500/25", unit: "Accounts" },
+              ].map((card, i) => (
+                <div key={i} className={`p-6 rounded-xl border ${isAdminDark ? "bg-[#111111]" : "bg-white"} ${card.color} shadow-lg relative overflow-hidden`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold font-mono">{card.title}</span>
+                    <card.icon className="h-4 w-4 text-[#C5A05A]" />
+                  </div>
+                  <div className="font-serif text-2xl font-bold text-white tracking-wide">{card.val}</div>
+                  <div className="text-[9px] text-gray-500 font-mono uppercase tracking-widest mt-1 flex items-center justify-between">
+                    <span>{card.unit} Vetted</span>
+                    <TrendingUp className="h-3 w-3 text-green-500 shrink-0 ml-1" />
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="text-[10px] text-gray-500 font-mono">Active commissions in workshop</span>
-                  <span className="text-[9px] bg-[#C5A05A]/10 text-[#C5A05A] border border-[#C5A05A]/35 px-1.5 py-0.5 rounded uppercase font-mono font-bold">
-                    In Production
-                  </span>
+              ))}
+            </div>
+
+            {/* CHARTS GRAPH SECTION */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              
+              {/* Left Column: Line Chart */}
+              <div className={`md:col-span-8 p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg`}>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="font-serif text-lg font-medium text-white">Escrow Settlement Trends</h3>
+                    <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest block">Daily revenue streams from verified customer checkouts</span>
+                  </div>
+                  <span className="text-xs bg-[#C5A05A]/10 text-[#C5A05A] px-2.5 py-1 rounded border border-[#C5A05A]/30 uppercase font-mono">Live Sync</span>
+                </div>
+
+                <div className="h-72 w-full text-xs">
+                  {chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                        <XAxis dataKey="label" stroke="#666" />
+                        <YAxis stroke="#666" />
+                        <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333", color: "#fff" }} />
+                        <Line type="monotone" dataKey="revenue" name="Revenue ($)" stroke="#C5A05A" strokeWidth={2.5} activeDot={{ r: 8 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-gray-500 font-mono">
+                      Awaiting transaction events to compile charts...
+                    </div>
+                  )}
                 </div>
               </div>
 
-            </div>
-
-            {/* Simple Bar & Pie Charts Grid for Brand Health */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              
-              {/* Left Column: Asset Capital allocation by Category (Bar Chart) (Span 6) */}
-              <div className="lg:col-span-6 bg-[#111111] border border-gray-800 rounded p-5">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-serif text-xs font-semibold text-white uppercase tracking-wider">Asset Capital Allocation (Stock Value)</h3>
-                  <span className="text-[9px] font-mono text-gray-500 uppercase">Live catalog data</span>
+              {/* Right Column: Collection Pie Chart */}
+              <div className={`md:col-span-4 p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg flex flex-col justify-between`}>
+                <div>
+                  <h3 className="font-serif text-lg font-medium text-white">Sales Share By Category</h3>
+                  <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest block mb-4">Percentage breakdown of purchased goods</span>
                 </div>
-                
-                <div className="h-48 w-full text-xs">
+
+                <div className="h-48 w-full flex items-center justify-center">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart 
-                      data={[
-                        { 
-                          name: "Bags", 
-                          value: products.filter(p => p.category === "bags").reduce((sum, p) => sum + (p.price * (p.inStock !== undefined ? p.inStock : 10)), 0),
-                          fill: "#7A4E2D" 
-                        },
-                        { 
-                          name: "Shoes", 
-                          value: products.filter(p => p.category === "shoes").reduce((sum, p) => sum + (p.price * (p.inStock !== undefined ? p.inStock : 10)), 0),
-                          fill: "#B98B5D" 
-                        },
-                        { 
-                          name: "Accessories", 
-                          value: products.filter(p => p.category === "accessories").reduce((sum, p) => sum + (p.price * (p.inStock !== undefined ? p.inStock : 10)), 0),
-                          fill: "#C5A05A" 
-                        },
-                      ]} 
-                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                    >
-                      <XAxis dataKey="name" stroke="#555" fontSize={10} />
-                      <YAxis stroke="#555" fontSize={10} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: "#111", borderColor: "#C5A05A", color: "#fff" }} 
-                        formatter={(value) => [`$${Number(value).toLocaleString()}`, "Stock Capital Value"]} 
-                      />
-                      <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-                        {[
-                          { name: "Bags", fill: "#7A4E2D" },
-                          { name: "Shoes", fill: "#B98B5D" },
-                          { name: "Accessories", fill: "#C5A05A" }
-                        ].map((entry, idx) => (
-                          <Cell key={`cell-dyn-${idx}`} fill={entry.fill} />
+                    <PieChart>
+                      <Pie data={donutData} innerRadius={45} outerRadius={65} paddingAngle={4} dataKey="value">
+                        {donutData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
                         ))}
-                      </Bar>
-                    </BarChart>
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
 
-              {/* Right Column: Category Demand Share (Pie Chart) (Span 6) */}
-              <div className="lg:col-span-6 bg-[#111111] border border-gray-800 rounded p-5 flex flex-col justify-between">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-serif text-xs font-semibold text-white uppercase tracking-wider">Category Sales Demand Share</h3>
-                  <span className="text-[9px] font-mono text-gray-500 uppercase">Volume distribution</span>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center justify-around gap-4">
-                  <div className="h-40 w-40 text-xs relative flex-shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={COLLECTION_SALES.map(item => ({
-                            name: item.name,
-                            value: item.sales,
-                            fill: item.fill
-                          }))}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={45}
-                          outerRadius={65}
-                          paddingAngle={3}
-                          dataKey="value"
-                        >
-                          {COLLECTION_SALES.map((entry, index) => (
-                            <Cell key={`cell-pie-${index}`} fill={entry.fill} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: "#111", borderColor: "#C5A05A", color: "#fff" }} 
-                          formatter={(value) => [`${value} items sold`, "Popularity Share"]} 
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="font-mono text-[9px] text-gray-500 uppercase tracking-widest">Total Sales</span>
-                      <span className="font-mono text-base font-bold text-white">
-                        {COLLECTION_SALES.reduce((sum, item) => sum + item.sales, 0)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 text-[10px] font-mono text-gray-400 w-full sm:w-auto">
-                    {COLLECTION_SALES.map((item, idx) => {
-                      const totalSales = COLLECTION_SALES.reduce((sum, i) => sum + i.sales, 0);
-                      const percentage = Math.round((item.sales / totalSales) * 100);
-                      return (
-                        <div key={idx} className="flex items-center justify-between sm:justify-start sm:space-x-4">
-                          <div className="flex items-center space-x-2">
-                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.fill }} />
-                            <span className="text-white font-medium">{item.name}</span>
-                          </div>
-                          <span>{percentage}% ({item.sales} sold)</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Interactive Operations Pipeline Steward */}
-            <div className="bg-[#1A1A1A] border border-gray-800 rounded p-5">
-              <div className="flex items-center justify-between mb-4 border-b border-gray-850 pb-3">
-                <div className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-[#C5A05A]" />
-                  <h3 className="font-serif text-sm font-semibold text-white">Workshop Tracking Pipeline Control</h3>
-                </div>
-                <span className="text-[10px] font-mono text-[#C5A05A] uppercase tracking-wider">Live Simulator</span>
-              </div>
-
-              <p className="text-xs text-gray-400 mb-5 leading-relaxed font-light font-sans">
-                As an administrator, you have permission to advance active custom commissions through the five stages of production and delivery. Changing these values instantly updates the client's private dashboard.
-              </p>
-
-              <div className="space-y-4">
-                {[
-                  { id: "AUR-3022", name: "Aurelius Travel Bag Commission", defaultVal: "Vintage Brown" },
-                  { id: "AUR-9204", name: "Aurelius Navigator Duffel", defaultVal: "Saddle Brown" },
-                  { id: "AUR-8113", name: "Aurelius Leather Nomad Sneakers", defaultVal: "Warm White" }
-                ].map((order, idx) => {
-                  const currentStage = activeOrderStages[order.id] !== undefined ? activeOrderStages[order.id] : 1;
-                  const stagesList = [
-                    "Tannery Processing",
-                    "Artisan Stitching",
-                    "Quality Inspection",
-                    "Out for Delivery",
-                    "Sovereign Handover (Completed)"
-                  ];
-
-                  return (
-                    <div key={idx} className="bg-[#111] border border-gray-850 rounded p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-sans">
-                      <div>
-                        <div className="flex items-center space-x-2 font-mono">
-                          <span className="text-xs font-bold text-[#C5A05A]">{order.id}</span>
-                          <span className="text-[9px] text-gray-500">• {order.defaultVal}</span>
-                        </div>
-                        <p className="text-xs font-serif font-medium text-white mt-1">{order.name}</p>
+                <div className="space-y-2 mt-4 font-mono text-[11px]">
+                  {donutData.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.fill }} />
+                        <span className="text-gray-400">{item.name}</span>
                       </div>
-
-                      <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                        <span className="text-[10px] font-mono text-gray-400">Current Pipeline Phase:</span>
-                        <select
-                          value={currentStage}
-                          onChange={(e) => handleUpdateOrderStage(order.id, parseInt(e.target.value))}
-                          className="bg-[#222] text-xs text-white border border-gray-800 rounded px-3 py-1.5 focus:outline-none cursor-pointer focus:border-[#C5A05A] font-semibold"
-                        >
-                          {stagesList.map((stg, i) => (
-                            <option key={i} value={i} className="bg-[#111] text-white">
-                              Phase {i + 1}: {stg}
-                            </option>
-                          ))}
-                        </select>
-                        <span className={`h-2 w-2 rounded-full ${currentStage === 4 ? "bg-green-500" : "bg-amber-500 animate-pulse"}`} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Grid: Charts (using recharts) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10">
-            
-            {/* Weekly sales Line chart (Span 8) */}
-            <div className="lg:col-span-8 bg-[#1A1A1A] border border-gray-800 rounded p-5 sm:p-6 shadow-md text-white">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="font-serif text-base font-semibold text-white">Weekly Revenue Trajectory ($)</h3>
-                <span className="text-[10px] bg-[#111111]/80 border border-gray-800 rounded px-2.5 py-0.5 text-gray-400 font-mono">
-                  Live Feed
-                </span>
-              </div>
-
-              <div className="h-64 w-full text-xs">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={REVENUE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222" opacity={0.6} />
-                    <XAxis dataKey="day" stroke="#777" />
-                    <YAxis stroke="#777" />
-                    <Tooltip contentStyle={{ backgroundColor: "#111", borderColor: "#C5A05A", color: "#fff" }} formatter={(value) => [`$${value}`, "Revenue"]} />
-                    <Line 
-                      type="monotone" 
-                      dataKey="revenue" 
-                      stroke="#C5A05A" 
-                      strokeWidth={3} 
-                      activeDot={{ r: 6 }} 
-                      dot={{ r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Sales by collection Bar Chart (Span 4) */}
-            <div className="lg:col-span-4 bg-[#1A1A1A] border border-gray-800 rounded p-5 sm:p-6 shadow-md text-white">
-              <h3 className="font-serif text-base font-semibold text-white mb-6">Collection Performance (SKUs sold)</h3>
-              
-              <div className="h-64 w-full text-xs">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={COLLECTION_SALES} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <XAxis dataKey="name" stroke="#777" />
-                    <YAxis stroke="#777" />
-                    <Tooltip contentStyle={{ backgroundColor: "#111", borderColor: "#C5A05A", color: "#fff" }} formatter={(value) => [value, "Items Sold"]} />
-                    <Bar dataKey="sales" radius={[4, 4, 0, 0]}>
-                      {COLLECTION_SALES.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Grid: Low Stock Alert & AI product Copywriting Studio */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            {/* Left: Low stock alerts & supplier list (Span 5) */}
-            <div className="lg:col-span-5 space-y-6">
-              
-              {/* Stock warnings */}
-              <div className="bg-[#1A1A1A] border border-gray-800 rounded p-5 shadow-md">
-                <div className="flex items-center space-x-2 mb-4">
-                  <AlertTriangle className="h-5 w-5 text-[#C5A05A]" />
-                  <h3 className="font-serif text-base font-semibold text-white">Critical Hide Stock Logs</h3>
-                </div>
-                
-                <div className="space-y-3 font-sans">
-                  {lowStockItems.map(item => (
-                    <div key={item.id} className="flex justify-between items-center p-3 bg-red-950/20 rounded border border-red-900/30">
-                      <div>
-                        <p className="font-semibold text-white text-xs">{item.name}</p>
-                        <p className="text-[10px] text-gray-400 font-mono">ID: {item.id}</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="inline-block bg-red-950/50 text-red-300 border border-red-900/40 text-[10px] px-2 py-0.5 rounded font-bold font-mono">
-                          {item.qty} left
-                        </span>
-                      </div>
+                      <span className="text-white font-bold">{item.value} Sold</span>
                     </div>
                   ))}
                 </div>
               </div>
+            </div>
 
-              {/* Supplier sync logs */}
-              <div className="bg-[#1A1A1A] border border-gray-800 rounded p-5 shadow-md">
-                <h3 className="font-serif text-base font-semibold text-white mb-3.5">Atelier Supplier Synchronization</h3>
-                <div className="space-y-2.5 text-xs text-gray-300">
-                  <div className="flex justify-between items-center py-2 border-b border-gray-800">
-                    <span className="text-gray-400">Tuscany Vegetable Tannery</span>
-                    <span className="text-green-400 font-bold">● Synchronized</span>
+            {/* LOWER ROW: RECENT ORDERS & LOW STOCK ALERTS */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              
+              {/* Recent Orders Table (Span 8) */}
+              <div className={`md:col-span-8 p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg`}>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-serif text-lg font-medium text-white">Recent Order Requests</h3>
+                  <button onClick={() => setActiveMenu("orders")} className="text-xs text-[#C5A05A] hover:underline font-semibold font-mono uppercase">View All Orders</button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-gray-400">
+                    <thead>
+                      <tr className="border-b border-gray-800 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                        <th className="py-3">Order ID</th>
+                        <th>Customer</th>
+                        <th>Total</th>
+                        <th>Pipeline Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-850/40">
+                      {orders.slice(0, 5).map((o) => (
+                        <tr key={o.id} className="hover:bg-neutral-800/10 transition-colors">
+                          <td className="py-3.5 font-mono text-white font-semibold">{o.id}</td>
+                          <td>
+                            <div className="font-medium text-gray-300">{o.customerName}</div>
+                            <div className="text-[10px] text-gray-500">{o.customerEmail}</div>
+                          </td>
+                          <td className="font-mono text-white">{formatPrice(o.total, storeSettings.baseCurrency)}</td>
+                          <td>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase font-bold tracking-wider ${
+                              o.status === "New" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" :
+                              o.status === "Processing" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
+                              o.status === "Shipped" ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" :
+                              o.status === "Delivered" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
+                              "bg-red-500/10 text-red-400 border border-red-500/20"
+                            }`}>
+                              {o.status}
+                            </span>
+                          </td>
+                          <td>
+                            <button 
+                              onClick={() => { setViewingOrder(o); setActiveMenu("orders"); }}
+                              className="text-gray-400 hover:text-white flex items-center space-x-1"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              <span>Details</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {orders.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-6 text-center text-gray-500 font-mono">
+                            No active orders recorded yet. Run simulation at bottom to generate some!
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Low Stock Alerts (Span 4) */}
+              <div className={`md:col-span-4 p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg flex flex-col justify-between`}>
+                <div>
+                  <div className="flex items-center space-x-2 text-amber-500 mb-4">
+                    <AlertCircle className="h-5 w-5" />
+                    <h3 className="font-serif text-lg font-medium text-white">Low Stock Warning</h3>
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-800">
-                    <span className="text-gray-400">Northampton Cobbler Atelier</span>
-                    <span className="text-green-400 font-bold">● Synchronized</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-gray-400">Milan Luxury Leather Accessories</span>
-                    <span className="text-[#C5A05A] font-bold animate-pulse">↻ Syncing Drafts</span>
+
+                  <div className="space-y-3">
+                    {lowStockItemsList.slice(0, 4).map((p) => (
+                      <div key={p.id} className="p-3 bg-amber-500/5 rounded border border-amber-500/10 flex justify-between items-center text-xs">
+                        <div className="min-w-0 pr-2">
+                          <p className="font-serif font-medium text-gray-300 truncate">{p.name}</p>
+                          <span className="text-[10px] text-gray-500 font-mono">Category: {p.category.toUpperCase()}</span>
+                        </div>
+                        <span className="font-mono text-amber-500 font-bold shrink-0">{p.inStock} left</span>
+                      </div>
+                    ))}
+                    {lowStockItemsList.length === 0 && (
+                      <div className="p-4 bg-green-500/5 rounded border border-green-500/10 text-xs text-green-400 flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4" />
+                        <span>All masterpiece inventories are fully supplied!</span>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                <button 
+                  onClick={() => { setActiveMenu("products"); setProductStockFilter("low"); }}
+                  className="w-full bg-neutral-800 hover:bg-neutral-700 text-white hover:text-[#C5A05A] transition-colors py-2 text-[10px] uppercase tracking-wider font-mono font-bold rounded mt-4"
+                >
+                  Manage Low Stock Catalogs
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. PRODUCT MANAGEMENT SYSTEM */}
+        {activeMenu === "products" && (
+          <div className="space-y-8">
+            
+            {/* INVENTORY CATALOG TABLE & FILTERS CARD */}
+            <div className={`p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg`}>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div>
+                  <h3 className="font-serif text-lg font-medium text-white">Artisanal Masterpieces Catalog</h3>
+                  <p className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">List of active products, variant SKUs and current stock holdings</p>
+                </div>
+                
+                {/* Trigger add new scroll anchor */}
+                {!isEditingProduct && (
+                  <button 
+                    onClick={() => { setIsEditingProduct(true); setProductUnderEdit(null); }}
+                    className="bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white px-4 py-2.5 rounded text-xs uppercase font-semibold tracking-wider flex items-center space-x-2 shadow-md cursor-pointer transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Publish New Masterpiece</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Advanced Search & Filtering toolbar */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 border-b border-gray-800/30 pb-4">
+                <div className="relative">
+                  <Search className="h-4 w-4 text-gray-500 absolute left-3 top-2.5" />
+                  <input 
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder="Search name, category, SKU..."
+                    className="w-full bg-[#181818] border border-gray-800 rounded pl-10 pr-3 py-1.5 outline-none focus:border-[#C5A05A] text-xs text-white"
+                  />
+                </div>
+
+                <select 
+                  value={productCategoryFilter}
+                  onChange={(e) => setProductCategoryFilter(e.target.value)}
+                  className="bg-[#181818] border border-gray-800 rounded px-3 py-1.5 outline-none focus:border-[#C5A05A] text-xs text-white"
+                >
+                  <option value="all">All Categories</option>
+                  <option value="bags">Bags & Luggage</option>
+                  <option value="shoes">Footwear & Shoes</option>
+                  <option value="accessories">Accessories & Care</option>
+                </select>
+
+                <select 
+                  value={productStockFilter}
+                  onChange={(e) => setProductStockFilter(e.target.value)}
+                  className="bg-[#181818] border border-gray-800 rounded px-3 py-1.5 outline-none focus:border-[#C5A05A] text-xs text-white"
+                >
+                  <option value="all">All Stock Statuses</option>
+                  <option value="low">Low Stock (≤5)</option>
+                  <option value="out">Out of Stock (0)</option>
+                </select>
+
+                <button 
+                  onClick={() => { setProductSearch(""); setProductCategoryFilter("all"); setProductStockFilter("all"); }}
+                  className="text-xs text-gray-500 hover:text-[#C5A05A] font-mono font-bold uppercase py-1 text-right md:text-left hover:underline"
+                >
+                  Reset Filtering Parameters
+                </button>
+              </div>
+
+              {/* TABLE CONTAINER */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-gray-400">
+                  <thead>
+                    <tr className="border-b border-gray-800 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                      <th className="py-3">Masterpiece Thumbnail</th>
+                      <th>Detail Specs</th>
+                      <th>Category</th>
+                      <th>MSRP Price</th>
+                      <th>In Stock</th>
+                      <th className="text-right">Catalog Management Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-850/40">
+                    {filteredProducts.map((p) => (
+                      <tr key={p.id} className="hover:bg-[#151515]/30 transition-colors">
+                        <td className="py-3">
+                          <img 
+                            src={p.image} 
+                            alt={p.name} 
+                            className="w-12 h-12 object-cover rounded border border-gray-800 shadow"
+                            onError={(e) => {
+                              // Prevent broken images
+                              e.currentTarget.src = "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=800";
+                            }}
+                            referrerPolicy="no-referrer"
+                          />
+                        </td>
+                        <td>
+                          <div className="font-serif text-sm font-semibold text-white max-w-sm truncate">{p.name}</div>
+                          <div className="text-[10px] text-gray-500 font-mono mt-0.5">SKU: {p.skus && p.skus.length > 0 ? p.skus[0].sku : "AUR-GEN-01"}</div>
+                        </td>
+                        <td className="uppercase font-mono text-[10px] text-[#C5A05A]">{p.category}</td>
+                        <td className="font-mono text-white font-medium">
+                          {p.originalPrice && <span className="text-gray-500 line-through mr-1.5 text-[10px]">{formatPrice(p.originalPrice, storeSettings.baseCurrency)}</span>}
+                          {formatPrice(p.price, storeSettings.baseCurrency)}
+                        </td>
+                        <td className="font-mono">
+                          <span className={`font-bold ${p.inStock === 0 ? "text-red-500" : p.inStock <= 5 ? "text-amber-500" : "text-green-500"}`}>
+                            {p.inStock} units
+                          </span>
+                        </td>
+                        <td className="text-right space-x-2">
+                          <button 
+                            onClick={() => editProductTrigger(p)}
+                            className="text-gray-400 hover:text-white p-1 rounded hover:bg-neutral-800 transition-colors"
+                            title="Edit specs details"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button 
+                            onClick={() => deleteProductTrigger(p.id, p.name)}
+                            className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-neutral-800 transition-colors"
+                            title="Purge listings"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredProducts.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-gray-500 font-mono">
+                          No matching masterpieces found in current parameters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
-            {/* Right: AI product description studio (Span 7) */}
-            <div className="lg:col-span-7 bg-[#222222]/30 border border-[#C5A05A]/30 rounded p-6 shadow-md text-white font-sans">
-              
-              <div className="flex items-center space-x-2.5 mb-4">
-                <Sparkles className="h-5 w-5 text-[#C5A05A]" />
-                <h3 className="font-serif text-base font-semibold text-white">AI Copywriting Studio</h3>
-              </div>
-              
-              <p className="text-gray-400 text-xs mb-6 leading-relaxed font-light font-sans">
-                Drafting a new product introduction? Provide minimal details to consult our AI copywriter. It outputs luxury, magazine-level marketing copy instantly.
-              </p>
-
-              <form onSubmit={handleGenerateDescription} className="space-y-4 text-xs font-sans">
-                <div className="grid grid-cols-2 gap-4">
+            {/* PRODUCT EDITING / ADDING COMPREHENSIVE FORM */}
+            {isEditingProduct && (
+              <div id="product-form-card" className={`p-8 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-2xl relative`}>
+                <div className="absolute top-0 inset-x-0 h-0.5 bg-[#C5A05A]" />
+                
+                <div className="flex justify-between items-center mb-6">
                   <div>
-                    <label className="block text-gray-400 mb-1">Leather Item Name</label>
-                    <input
-                      type="text"
-                      className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A]"
-                      placeholder="e.g. Aurelius Sovereign Duffel"
-                      value={prodName}
-                      onChange={(e) => setProdName(e.target.value)}
+                    <h3 className="font-serif text-xl font-medium text-white">{productUnderEdit ? "Edit Curated Specifications" : "Bespoke Masterpiece Creation Form"}</h3>
+                    <p className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mt-0.5">Validate information criteria and image uploads before publishing</p>
+                  </div>
+                  <button 
+                    onClick={resetProductForm}
+                    className="p-1 rounded-full hover:bg-neutral-800 text-gray-400 hover:text-white"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleProductSubmit} className="space-y-6">
+                  
+                  {/* Row 1: Name, Price, original price */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <div className="md:col-span-6">
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Masterpiece Title *</label>
+                      <input 
+                        type="text"
+                        value={formName}
+                        onChange={(e) => setFormName(e.target.value)}
+                        placeholder="e.g. Aurelius Navigator Weekend Bag"
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                        required
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Listing MSRP Price (USD) *</label>
+                      <input 
+                        type="number"
+                        step="1"
+                        value={formPrice}
+                        onChange={(e) => setFormPrice(e.target.value)}
+                        placeholder="e.g. 295"
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                        required
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Strike-through Original Price (USD)</label>
+                      <input 
+                        type="number"
+                        step="1"
+                        value={formDiscountPrice}
+                        onChange={(e) => setFormDiscountPrice(e.target.value)}
+                        placeholder="e.g. 350"
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Category, Subcategory, Stock, SKU */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Atelier Classification Category *</label>
+                      <select 
+                        value={formCategory}
+                        onChange={(e) => setFormCategory(e.target.value as any)}
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                        required
+                      >
+                        <option value="bags">Bags & Luggage</option>
+                        <option value="shoes">Footwear & Shoes</option>
+                        <option value="accessories">Accessories & Care</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Subcategory / Collection Tag</label>
+                      <input 
+                        type="text"
+                        value={formSubcategory}
+                        onChange={(e) => setFormSubcategory(e.target.value)}
+                        placeholder="e.g. Executive Carry"
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Available Stock Units *</label>
+                      <input 
+                        type="number"
+                        value={formStock}
+                        onChange={(e) => setFormStock(e.target.value)}
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Master Listing Sku Code</label>
+                      <input 
+                        type="text"
+                        value={formSku}
+                        onChange={(e) => setFormSku(e.target.value)}
+                        placeholder="e.g. AUR-NAV-DB-BRW"
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 3: Description */}
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Natural Leathercraft Material & Narrative Description *</label>
+                    <textarea 
+                      value={formDescription}
+                      onChange={(e) => setFormDescription(e.target.value)}
+                      placeholder="Narrate details, tanning history, and physical texture guidelines..."
+                      rows={5}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white leading-relaxed"
                       required
                     />
                   </div>
-                  <div>
-                    <label className="block text-gray-400 mb-1">Catalog Category</label>
-                    <select
-                      className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A]"
-                      value={prodCat}
-                      onChange={(e) => setProdCat(e.target.value)}
-                    >
-                      <option value="Travel Bags">Travel Bags</option>
-                      <option value="Handmade Shoes">Handmade Shoes</option>
-                      <option value="Premium Accessories">Premium Accessories</option>
-                    </select>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-gray-400 mb-1">Key Hide Features</label>
-                    <input
-                      type="text"
-                      className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A]"
-                      placeholder="e.g. 2mm Crazy Horse hide, pure brass details"
-                      value={prodFeatures}
-                      onChange={(e) => setProdFeatures(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-400 mb-1">Copywriting Voice Tone</label>
-                    <select
-                      className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A]"
-                      value={prodTone}
-                      onChange={(e) => setProdTone(e.target.value)}
-                    >
-                      <option value="luxurious">Luxurious & Editorial</option>
-                      <option value="heritage">Heritage & Classic</option>
-                      <option value="rugged">Rugged Executive</option>
-                      <option value="minimalist">Apple-Level Simplicity</option>
-                    </select>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isGenerating || !prodName.trim()}
-                  className="w-full bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white disabled:bg-neutral-800 disabled:text-gray-500 py-3 uppercase tracking-widest font-semibold rounded text-[10px] transition-colors flex items-center justify-center space-x-2 shadow-md cursor-pointer border border-transparent font-sans"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  <span>{isGenerating ? "Drafting Editorial Legacy..." : "Inscribe Luxury Description"}</span>
-                </button>
-              </form>
-
-              {/* Result Output Card */}
-              {generatedDescription && (
-                <div className="mt-6 bg-[#111111] border border-[#C5A05A]/40 rounded p-4 relative">
-                  <button
-                    onClick={handleCopyAI}
-                    className="absolute top-4 right-4 p-1.5 rounded bg-[#222222] hover:bg-[#333333] border border-gray-800 text-gray-300 transition-all flex items-center space-x-1"
-                    title="Copy to clipboard"
-                  >
-                    {copiedAI ? (
-                      <>
-                        <ClipboardCheck className="h-3.5 w-3.5 text-green-400" />
-                        <span className="text-[9px] text-green-400 font-bold font-mono">Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span className="text-[9px] font-mono">Copy Draft</span>
-                      </>
-                    )}
-                  </button>
-
-                  <span className="text-[9px] text-[#C5A05A] font-mono tracking-widest uppercase block mb-3 font-semibold">Generated Copywriting</span>
-                  
-                  <div className="text-xs text-gray-300 leading-relaxed max-h-56 overflow-y-auto pr-2 whitespace-pre-wrap font-sans">
-                    {generatedDescription}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* RENDER PRODUCTS TAB WITH NESTED SUB-TABS */}
-      {activeTab === "products" && (
-        <div className="space-y-6">
-          {/* Sub-tab Navigation */}
-          <div className="flex border-b border-gray-800 pb-3 mb-6 gap-2 flex-wrap">
-            <button
-              onClick={() => setActiveProductSubTab("inventory")}
-              className={`px-3 py-1 text-[10px] uppercase font-mono tracking-wider transition-all border-b-2 ${
-                activeProductSubTab === "inventory" ? "border-[#C5A05A] text-white font-bold" : "border-transparent text-gray-500 hover:text-white"
-              }`}
-            >
-              Inventory Management
-            </button>
-            <button
-              onClick={() => setActiveProductSubTab("skus")}
-              className={`px-3 py-1 text-[10px] uppercase font-mono tracking-wider transition-all border-b-2 ${
-                activeProductSubTab === "skus" ? "border-[#C5A05A] text-white font-bold" : "border-transparent text-gray-500 hover:text-white"
-              }`}
-            >
-              SKU Stock Ledger
-            </button>
-            <button
-              onClick={() => setActiveProductSubTab("importer")}
-              className={`px-3 py-1 text-[10px] uppercase font-mono tracking-wider transition-all border-b-2 ${
-                activeProductSubTab === "importer" ? "border-[#C5A05A] text-white font-bold" : "border-transparent text-gray-500 hover:text-white"
-              }`}
-            >
-              AI Product Hub
-            </button>
-            <button
-              onClick={() => setActiveProductSubTab("deployment")}
-              className={`px-3 py-1 text-[10px] uppercase font-mono tracking-wider transition-all border-b-2 ${
-                activeProductSubTab === "deployment" ? "border-[#C5A05A] text-white font-bold" : "border-transparent text-gray-500 hover:text-white"
-              }`}
-            >
-              Deployment & Backups
-            </button>
-          </div>
-
-          {/* Sub-tab: Inventory Management */}
-          {activeProductSubTab === "inventory" && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Add / Edit Product Form (Span 5) */}
-          <div id="admin-form-anchor" className="lg:col-span-5 bg-[#1A1A1A] border border-gray-800 rounded p-6 shadow-md text-white font-sans scroll-mt-6">
-            <div className="flex items-center justify-between mb-5 border-b border-gray-800 pb-3">
-              <div className="flex items-center space-x-2.5">
-                {editingProduct ? (
-                  <FileEdit className="h-5 w-5 text-[#C5A05A]" />
-                ) : (
-                  <Plus className="h-5 w-5 text-[#C5A05A]" />
-                )}
-                <h2 className="font-serif text-lg font-medium tracking-tight text-white uppercase">
-                  {editingProduct ? "Edit Masterpiece" : "Insert Custom Masterpiece"}
-                </h2>
-              </div>
-              {editingProduct && (
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="px-2.5 py-1 rounded bg-[#222222] hover:bg-[#333333] text-[9.5px] tracking-wider uppercase font-mono text-gray-400 hover:text-white transition-all border border-gray-850"
-                >
-                  Cancel Edit
-                </button>
-              )}
-            </div>
-
-            <form onSubmit={handleProductSubmit} className="space-y-4 text-xs font-sans">
-              
-              <div>
-                <label className="block text-gray-400 mb-1 uppercase tracking-wider text-[9px] font-mono">Product Title *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Aurelius Valerius Travel Duffel"
-                  className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A]"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-gray-400 mb-1 uppercase tracking-wider text-[9px] font-mono">Price (USD) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="e.g. 295.00"
-                    className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A] font-mono"
-                    value={formPrice}
-                    onChange={(e) => setFormPrice(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-400 mb-1 uppercase tracking-wider text-[9px] font-mono">Original Price (Strikeout)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="e.g. 395.00 (Blank if none)"
-                    className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A] font-mono"
-                    value={formOriginalPrice}
-                    onChange={(e) => setFormOriginalPrice(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-gray-400 mb-1 uppercase tracking-wider text-[9px] font-mono">Initial Stock *</label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="e.g. 10"
-                    className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A] font-mono"
-                    value={formInStock}
-                    onChange={(e) => setFormInStock(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-400 mb-1 uppercase tracking-wider text-[9px] font-mono">Subcategory Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Heritage Briefcase"
-                    className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A]"
-                    value={formSubcategory}
-                    onChange={(e) => setFormSubcategory(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-gray-400 mb-1 uppercase tracking-wider text-[9px] font-mono">Category Folder *</label>
-                  <select
-                    className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A]"
-                    value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value as any)}
-                  >
-                    <option value="bags">Travel Bags Collection</option>
-                    <option value="shoes">Handmade Shoes Collection</option>
-                    <option value="accessories">Premium Accessories Collection</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-gray-400 mb-1 uppercase tracking-wider text-[9px] font-mono">Product Description *</label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="Inscribe product materials, leather tanning method, and care details..."
-                  className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 outline-none text-white focus:border-[#C5A05A]"
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                />
-              </div>
-
-              {/* TECHNICAL SPECS */}
-              <div className="bg-[#111111] p-3 rounded border border-gray-800 space-y-3">
-                <span className="font-mono text-[9px] tracking-widest uppercase text-[#C5A05A] block">Technical Ledger Details</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Dimensions (e.g. 45 x 22 x 25 cm)"
-                    className="bg-[#1A1A1A] border border-gray-800 rounded p-1.5 outline-none text-white focus:border-[#C5A05A] text-[11px]"
-                    value={formDimensions}
-                    onChange={(e) => setFormDimensions(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Weight (e.g. 1.5 kg)"
-                    className="bg-[#1A1A1A] border border-gray-800 rounded p-1.5 outline-none text-white focus:border-[#C5A05A] text-[11px]"
-                    value={formWeight}
-                    onChange={(e) => setFormWeight(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Capacity (e.g. 30 Litres)"
-                    className="bg-[#1A1A1A] border border-gray-800 rounded p-1.5 outline-none text-white focus:border-[#C5A05A] text-[11px]"
-                    value={formCapacity}
-                    onChange={(e) => setFormCapacity(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Key features (comma separated)"
-                    className="bg-[#1A1A1A] border border-gray-800 rounded p-1.5 outline-none text-white focus:border-[#C5A05A] text-[11px]"
-                    value={formFeatures}
-                    onChange={(e) => setFormFeatures(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Colors (e.g. Classic Amber, Black)"
-                    className="bg-[#1A1A1A] border border-gray-800 rounded p-1.5 outline-none text-white focus:border-[#C5A05A] text-[11px]"
-                    value={formVariantColors}
-                    onChange={(e) => setFormVariantColors(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Colors HEX (e.g. #C5A05A, #111111)"
-                    className="bg-[#1A1A1A] border border-gray-800 rounded p-1.5 outline-none text-white focus:border-[#C5A05A] text-[11px]"
-                    value={formVariantColorsHex}
-                    onChange={(e) => setFormVariantColorsHex(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* INDIVIDUAL SKU MANAGEMENT SECTION */}
-              <div className="bg-[#111111] p-3 rounded border border-gray-800 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-[9px] tracking-widest uppercase text-[#C5A05A] block">Individual SKU Ledger</span>
-                  <button
-                    type="button"
-                    onClick={handleGenerateSkusFromColors}
-                    className="text-[9px] font-mono tracking-wider text-[#C5A05A] hover:text-white bg-[#C5A05A]/10 border border-[#C5A05A]/25 rounded px-2 py-0.5 uppercase hover:bg-[#C5A05A]/20 transition-all"
-                  >
-                    Auto-Generate SKUs
-                  </button>
-                </div>
-                
-                {formSkus.length === 0 ? (
-                  <div className="text-center py-4 border border-dashed border-gray-800 rounded bg-[#1A1A1A]/50 text-gray-500 text-[10px]">
-                    No SKUs mapped yet. Click "Auto-Generate SKUs" to create variants based on your colors.
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {formSkus.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-[#1A1A1A] border border-gray-850 rounded">
-                        <div className="flex flex-col shrink-0">
-                          <span className="text-[10px] font-bold text-white truncate max-w-[110px]">{item.color}</span>
-                          <span className="text-[8px] font-mono text-gray-500 uppercase">Variant</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <input
-                            type="text"
-                            required
-                            placeholder="SKU (e.g. AUR-BAG-AMB)"
-                            className="w-full bg-[#111111] border border-gray-800 rounded px-2 py-1 text-[10px] outline-none text-white focus:border-[#C5A05A] font-mono"
-                            value={item.sku}
-                            onChange={(e) => {
-                              const updated = [...formSkus];
-                              updated[idx] = { ...updated[idx], sku: e.target.value.toUpperCase() };
-                              setFormSkus(updated);
-                            }}
-                          />
-                        </div>
-                        <div className="w-16 shrink-0 flex items-center bg-[#111111] border border-gray-800 rounded px-1.5 py-0.5">
-                          <input
-                            type="number"
-                            required
-                            placeholder="Qty"
-                            className="w-full bg-transparent text-[10px] outline-none text-white font-mono text-center"
-                            value={item.inStock}
-                            onChange={(e) => {
-                              const updated = [...formSkus];
-                              updated[idx] = { ...updated[idx], inStock: parseInt(e.target.value) || 0 };
-                              setFormSkus(updated);
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    <div className="text-[9px] text-gray-500 font-mono text-center">
-                      Combined total stock: <span className="text-white font-bold">{formSkus.reduce((sum, item) => sum + (item.inStock || 0), 0)} units</span>
+                  {/* Row 4: Specifications (Dimensions, Weight, Care, features) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Physical Specifications Dimensions</label>
+                      <input 
+                        type="text"
+                        value={formDimensions}
+                        onChange={(e) => setFormDimensions(e.target.value)}
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Item Weight</label>
+                      <input 
+                        type="text"
+                        value={formWeight}
+                        onChange={(e) => setFormWeight(e.target.value)}
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Care & Preservation Protocols (Separated by comma)</label>
+                      <input 
+                        type="text"
+                        value={formCare}
+                        onChange={(e) => setFormCare(e.target.value)}
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Key Artisan Craft Features (Separated by comma)</label>
+                      <input 
+                        type="text"
+                        value={formFeatures}
+                        onChange={(e) => setFormFeatures(e.target.value)}
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      />
                     </div>
                   </div>
-                )}
-              </div>
 
-              {/* DYNAMIC MULTI-IMAGE UPLOAD (MAX 10) */}
-              <div className="bg-[#111111] p-3 rounded border border-gray-800 space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="block text-[#C5A05A] font-mono text-[9px] tracking-widest uppercase">Masterpiece Photographs (Up to 10) *</label>
-                  <span className="text-[9px] font-mono text-gray-500">
-                    {existingImages.length + imageFiles.length}/10 selected
+                  {/* Color variants */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Variant Colors Names (Separated by comma)</label>
+                      <input 
+                        type="text"
+                        value={formColors}
+                        onChange={(e) => setFormColors(e.target.value)}
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Variant Colors Hex Codes (Separated by comma)</label>
+                      <input 
+                        type="text"
+                        value={formColorsHex}
+                        onChange={(e) => setFormColorsHex(e.target.value)}
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Collections assignment checkboxes */}
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Assign Masterpiece to Collections</label>
+                    <div className="flex flex-wrap gap-4 p-3 bg-[#181818] border border-gray-850 rounded">
+                      {collections.map(col => (
+                        <label key={col.id} className="flex items-center space-x-2 text-xs text-gray-300 select-none cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={selectedCollections.includes(col.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedCollections([...selectedCollections, col.id]);
+                              } else {
+                                setSelectedCollections(selectedCollections.filter(id => id !== col.id));
+                              }
+                            }}
+                            className="rounded border-gray-800 text-[#C5A05A] focus:ring-0"
+                          />
+                          <span>{col.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* IMAGE UPLOAD & COMPRESSION CONTAINER */}
+                  <div className="p-5 bg-[#141414] border border-gray-850 rounded-xl space-y-4">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="text-xs uppercase tracking-widest font-mono text-white font-bold">Atelier Multi-Image Photographics</h4>
+                        <span className="text-[10px] text-gray-500 font-light mt-0.5 block">Compression canvas automatically formats images below 1MB safe Firestore thresholds.</span>
+                      </div>
+                      <span className="text-[10px] text-[#C5A05A] font-mono">Max 10 Assets</span>
+                    </div>
+
+                    {/* Drag-and-drop simulated dropzone */}
+                    <div className="border border-dashed border-gray-800 hover:border-[#C5A05A]/50 bg-[#0f0f0f] rounded-lg p-6 text-center transition-colors relative cursor-pointer">
+                      <input 
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageFileChange}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                      <Upload className="h-8 w-8 text-gray-500 mx-auto mb-2" />
+                      <p className="text-xs text-gray-300 font-medium">Drag and drop masterpiece photography here, or click to browse files</p>
+                      <span className="text-[9px] text-gray-500 font-mono uppercase mt-1 block">Supports PNG, JPG, JPEG, WEBP formats</span>
+                    </div>
+
+                    {/* Fallback Image URL input */}
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Optional Web/Fallback Image Link URL (Backup if upload is skipped)</label>
+                      <input 
+                        type="url"
+                        value={fallbackImageUrl}
+                        onChange={(e) => setFallbackImageUrl(e.target.value)}
+                        placeholder="https://images.unsplash.com/photo-..."
+                        className="w-full bg-[#1c1c1c] border border-gray-850 rounded px-3 py-1.5 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                      />
+                    </div>
+
+                    {/* Existing Images (Edit mode only) */}
+                    {existingImagesList.length > 0 && (
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">Existing Curated Catalog Assets</span>
+                        <div className="flex flex-wrap gap-3">
+                          {existingImagesList.map((img, idx) => (
+                            <div key={idx} className="relative group rounded border border-gray-800 overflow-hidden">
+                              <img src={img} className="w-16 h-16 object-cover" referrerPolicy="no-referrer" />
+                              <button 
+                                type="button"
+                                onClick={() => removeExistingProductImage(idx)}
+                                className="absolute top-1 right-1 p-0.5 bg-black/80 rounded hover:text-red-500 text-gray-400 transition-colors"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Selected files previews */}
+                    {imagePreviews.length > 0 && (
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2">Newly Uploaded Asset Previews</span>
+                        <div className="flex flex-wrap gap-3">
+                          {imagePreviews.map((preview, idx) => (
+                            <div key={idx} className="relative group rounded border border-gray-850 overflow-hidden">
+                              <img src={preview} className="w-16 h-16 object-cover" referrerPolicy="no-referrer" />
+                              <button 
+                                type="button"
+                                onClick={() => removeSelectedImageFile(idx)}
+                                className="absolute top-1 right-1 p-0.5 bg-black/80 rounded hover:text-red-500 text-gray-400 transition-colors"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Feedback Banners */}
+                  {productFormError && (
+                    <div className="p-3.5 bg-red-950/20 border border-red-500/30 text-red-400 text-xs rounded flex items-center space-x-2">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>{productFormError}</span>
+                    </div>
+                  )}
+
+                  {productFormSuccess && (
+                    <div className="p-3.5 bg-green-950/20 border border-green-500/30 text-green-400 text-xs rounded flex items-center space-x-2">
+                      <CheckCircle className="h-4 w-4 shrink-0" />
+                      <span>{productFormSuccess}</span>
+                    </div>
+                  )}
+
+                  {/* Form actions */}
+                  <div className="flex space-x-3 pt-2">
+                    <button 
+                      type="submit"
+                      disabled={isUploadingFiles}
+                      className="bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white disabled:bg-neutral-800 disabled:text-gray-500 px-6 py-3 rounded text-xs uppercase font-bold tracking-widest transition-all cursor-pointer shadow-md flex items-center space-x-2 border border-transparent"
+                    >
+                      {isUploadingFiles ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin shrink-0" />
+                          <span>Encoding Transmission...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4" />
+                          <span>{productUnderEdit ? "Commit Curations" : "Publish Masterpiece"}</span>
+                        </>
+                      )}
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={resetProductForm}
+                      className="bg-neutral-800 hover:bg-neutral-700 text-white px-5 py-3 rounded text-xs uppercase tracking-wider transition-colors font-semibold border border-transparent"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. COLLECTIONS VIEW */}
+        {activeMenu === "collections" && (() => {
+          // Compute filtered list of collections based on search and status
+          const filteredCollections = collections.filter(col => {
+            const matchesSearch = collectionSearch === "" || 
+              col.name.toLowerCase().includes(collectionSearch.toLowerCase()) || 
+              (col.description && col.description.toLowerCase().includes(collectionSearch.toLowerCase())) ||
+              (col.badge && col.badge.toLowerCase().includes(collectionSearch.toLowerCase()));
+
+            if (!matchesSearch) return false;
+
+            if (collectionStatusFilter === "published") {
+              return col.isPublished !== false;
+            }
+            if (collectionStatusFilter === "draft") {
+              return col.isPublished === false;
+            }
+            if (collectionStatusFilter === "featured") {
+              return col.isFeatured === true;
+            }
+            return true;
+          });
+
+          const isAllFilteredSelected = filteredCollections.length > 0 && filteredCollections.every(c => selectedCollectionIds.includes(c.id));
+
+          return (
+            <div className="space-y-8">
+              
+              {/* Feedback notice alert */}
+              {collectionActionNotice && (
+                <div className="p-4 bg-gradient-to-r from-amber-500/10 via-[#1a1813] to-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between shadow-lg">
+                  <div className="flex items-center space-x-3 text-amber-300 text-xs">
+                    <Sparkles className="h-4 w-4 shrink-0 text-amber-400 animate-pulse" />
+                    <span className="font-mono">{collectionActionNotice}</span>
+                  </div>
+                  <button 
+                    onClick={() => setCollectionActionNotice("")}
+                    className="text-gray-400 hover:text-white text-xs font-mono px-2 py-0.5 rounded hover:bg-gray-800"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {/* QUICK-CREATE TEMPLATES FOR FEATURED COLLECTIONS */}
+              <div className={`p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg space-y-4`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-850 pb-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <Zap className="h-4 w-4 text-[#C5A05A]" />
+                      <h3 className="font-serif text-base font-semibold text-white">Quick-Create Featured Collection Templates</h3>
+                    </div>
+                    <span className="text-[10px] text-gray-400 font-mono uppercase tracking-widest block mt-0.5">
+                      Launch pre-curated luxury capsules pre-matched with active store inventory in 1 click
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-[#C5A05A] bg-[#C5A05A]/10 border border-[#C5A05A]/20 px-2.5 py-1 rounded-full self-start sm:self-auto">
+                    6 Curated Templates Available
                   </span>
                 </div>
 
-                {/* Previews of Existing Images when Editing */}
-                {existingImages.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[9px] text-gray-500 uppercase font-mono">Preserved Catalog Assets:</p>
-                    <div className="grid grid-cols-5 gap-2">
-                      {existingImages.map((src, index) => (
-                        <div key={index} className="relative group aspect-square rounded overflow-hidden border border-gray-800 bg-[#1A1A1A]">
-                          <img src={src} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {FEATURED_COLLECTION_TEMPLATES.map(tmpl => {
+                    const matchedIds = getMatchingProductIdsForTemplate(tmpl);
+                    return (
+                      <div key={tmpl.id} className="p-4 bg-[#161616] border border-gray-800 hover:border-[#C5A05A]/50 rounded-lg flex flex-col justify-between space-y-3 transition-all hover:shadow-lg">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] uppercase tracking-wider font-mono px-2 py-0.5 bg-[#C5A05A]/15 text-[#C5A05A] border border-[#C5A05A]/30 rounded-full font-bold">
+                              {tmpl.badge}
+                            </span>
+                            <span className="text-[9px] text-gray-500 font-mono">
+                              {matchedIds.length} Products Match
+                            </span>
+                          </div>
+                          <h4 className="font-serif text-sm font-semibold text-white">{tmpl.name}</h4>
+                          <p className="text-[11px] text-gray-400 font-light line-clamp-2 leading-relaxed">
+                            {tmpl.description}
+                          </p>
+                        </div>
+
+                        <div className="pt-2 border-t border-gray-850 flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleRemoveExistingImage(src)}
-                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-red-400"
+                            onClick={() => handleQuickLaunchTemplate(tmpl)}
+                            className="flex-1 bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white py-1.5 px-2 rounded font-semibold text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center space-x-1"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Zap className="h-3 w-3" />
+                            <span>1-Click Launch</span>
                           </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Previews of Newly Selected Images */}
-                {imagePreviews.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[9px] text-green-400 uppercase font-mono">Staged to upload:</p>
-                    <div className="grid grid-cols-5 gap-2">
-                      {imagePreviews.map((src, index) => (
-                        <div key={index} className="relative group aspect-square rounded overflow-hidden border border-gray-800 bg-[#1A1A1A]">
-                          <img src={src} className="w-full h-full object-cover" alt="" />
                           <button
                             type="button"
-                            onClick={() => handleRemoveNewImage(index)}
-                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-red-400"
+                            onClick={() => handleApplyTemplateToForm(tmpl)}
+                            className="bg-[#222222] hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-750 py-1.5 px-2.5 rounded text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center space-x-1"
+                            title="Fill form values to customize first"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Edit className="h-3 w-3" />
+                            <span>Pre-fill</span>
                           </button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* File Drop/Input Trigger */}
-                {(existingImages.length + imageFiles.length < 10) && (
-                  <div className="border border-dashed border-gray-800 hover:border-[#C5A05A]/50 rounded bg-[#1A1A1A] p-3 text-center cursor-pointer transition-all relative">
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleMultiImageChange}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                    <div className="py-1">
-                      <Upload className="mx-auto h-5 w-5 text-gray-500" />
-                      <p className="text-[10px] text-gray-400 mt-1 font-medium">Click to select product photos</p>
-                      <p className="text-[8px] text-gray-600 font-mono">JPEG, PNG, WEBP • Max 10 images concurrently</p>
-                    </div>
-                  </div>
-                )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* MASTERPIECE VIDEO PREVIEW */}
-              <div className="bg-[#111111] p-3 rounded border border-gray-800 space-y-3">
-                <label className="block text-[#C5A05A] font-mono text-[9px] tracking-widest uppercase">Artisan Studio Video Preview</label>
+              {/* MAIN COLLECTIONS MANAGER */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 
-                {/* Existing Video asset representation */}
-                {!videoPreview && existingVideo && (
-                  <div className="flex items-center justify-between p-2 rounded bg-neutral-900 border border-gray-850">
-                    <div className="flex items-center space-x-2">
-                      <div className="h-2 w-2 rounded-full bg-[#C5A05A] animate-pulse" />
-                      <span className="text-[10px] text-gray-300 font-mono">Preserved: Video loop active</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setExistingVideo("")}
-                      className="text-red-400 hover:text-red-300 uppercase tracking-wider text-[9px] font-mono font-bold"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )}
-
-                {/* Newly selected video preview */}
-                {videoPreview && (
-                  <div className="space-y-2">
-                    <video src={videoPreview} controls className="w-full h-24 rounded border border-gray-850 bg-black" />
-                    <div className="flex justify-between items-center">
-                      <p className="text-[9px] text-green-400 font-mono truncate max-w-[70%]">{videoFile?.name}</p>
-                      <button
-                        type="button"
-                        onClick={handleRemoveVideo}
-                        className="text-red-400 hover:text-red-300 font-mono text-[9px] uppercase font-bold"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Video Selection Input */}
-                {!videoPreview && !existingVideo && (
-                  <div className="border border-dashed border-gray-800 hover:border-[#C5A05A]/50 rounded bg-[#1A1A1A] p-3 text-center cursor-pointer transition-all relative">
-                    <input
-                      type="file"
-                      accept="video/*"
-                      onChange={handleVideoChange}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                    <div className="py-1">
-                      <Upload className="mx-auto h-5 w-5 text-gray-500" />
-                      <p className="text-[10px] text-gray-400 mt-1 font-medium">Click to select showcase video</p>
-                      <p className="text-[8px] text-gray-600 font-mono">MP4, MOV, WEBM (Max 50MB limits)</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Status feedback */}
-              {uploadError && (
-                <div className="p-3 bg-red-950/20 border border-red-900/30 text-red-300 rounded font-mono text-[10px]">
-                  ⚠️ Error: {uploadError}
-                </div>
-              )}
-              {uploadSuccess && (
-                <div className="p-3 bg-green-950/20 border border-green-900/30 text-green-300 rounded font-mono text-[10px] flex items-start space-x-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0 mt-0.5" />
-                  <span>{uploadSuccess}</span>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isUploading}
-                className="w-full bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white disabled:bg-neutral-800 disabled:text-gray-500 py-3 uppercase tracking-widest font-semibold rounded text-[10px] transition-colors flex items-center justify-center space-x-2 shadow-md cursor-pointer border border-transparent font-sans"
-              >
-                {editingProduct ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin text-black" />
-                    <span>{isUploading ? "Updating catalog entries..." : "Apply Masterpiece Changes"}</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4" />
-                    <span>{isUploading ? "Uploading & Writing to Firestore..." : "Log Product to Database"}</span>
-                  </>
-                )}
-              </button>
-
-            </form>
-          </div>
-
-          {/* Manage Products List (Span 7) */}
-          <div className="lg:col-span-7 space-y-6">
-            
-            <div className="bg-[#1A1A1A] border border-gray-800 rounded p-6 shadow-md text-white font-sans">
-              <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-3">
-                <div className="flex items-center space-x-2">
-                  <Database className="h-5 w-5 text-[#C5A05A]" />
-                  <h2 className="font-serif text-lg font-medium tracking-tight text-white uppercase">Vault-Stored Products</h2>
-                </div>
-                <span className="font-mono text-[10px] bg-[#111111]/80 border border-gray-800 rounded px-2.5 py-0.5 text-[#C5A05A]">
-                  {customProducts.length} custom SKUs
-                </span>
-              </div>
-
-              {customProducts.length === 0 ? (
-                <div className="text-center py-16 border border-dashed border-gray-800 rounded bg-[#111111]/50 font-sans">
-                  <Database className="mx-auto h-8 w-8 text-neutral-600 mb-3" />
-                  <p className="font-serif text-sm font-semibold text-gray-400">No dynamic database items logged yet</p>
-                  <p className="text-[10px] text-gray-500 max-w-xs mx-auto mt-1 leading-relaxed">
-                    Insert products via the form on the left. They will be saved securely to Firestore and live-inserted into the catalog!
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-800 text-[10px] uppercase text-gray-400 font-mono">
-                        <th className="pb-3">Masterpiece</th>
-                        <th className="pb-3">Category</th>
-                        <th className="pb-3">Price</th>
-                        <th className="pb-3 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-800/60 font-sans">
-                      {customProducts.map((p) => (
-                        <tr key={p.id} className="hover:bg-neutral-900/40">
-                          <td className="py-3.5 pr-2">
-                            <div className="flex items-center space-x-3">
-                              <img src={p.image} className="w-9 h-9 object-cover rounded border border-gray-800 shadow" alt={p.name} referrerPolicy="no-referrer" />
-                              <div className="max-w-44 sm:max-w-xs truncate">
-                                <span className="font-semibold text-white text-[12px] block truncate">{p.name}</span>
-                                <span className="text-[10px] text-gray-500 font-mono truncate block">ID: {p.id}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3.5 capitalize text-gray-300 font-mono text-[10.5px]">
-                            {p.category}
-                          </td>
-                          <td className="py-3.5 text-white font-mono font-semibold">
-                            ${p.price.toFixed(2)}
-                          </td>
-                          <td className="py-3.5 text-right space-x-1">
-                            <button
-                              onClick={() => handleEditProduct(p)}
-                              className="p-1.5 text-[#C5A05A] hover:text-white hover:bg-[#C5A05A]/10 rounded border border-transparent hover:border-[#C5A05A]/35 transition-all cursor-pointer inline-flex items-center"
-                              title="Edit product"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteProduct(p.id, p.name)}
-                              className="p-1.5 text-red-400 hover:text-white hover:bg-red-950/60 rounded border border-transparent hover:border-red-900/30 transition-all cursor-pointer inline-flex items-center"
-                              title="Delete product from database"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* General Database Sync info box */}
-            <div className="bg-[#1A1A1A] border border-gray-800 rounded p-5 flex items-start space-x-4">
-              <div className="p-2.5 rounded bg-[#C5A05A]/10 text-[#C5A05A] border border-[#C5A05A]/20 shrink-0">
-                <CheckCircle2 className="h-5 w-5" />
-              </div>
-              <div className="space-y-1 font-sans">
-                <h4 className="font-semibold text-white text-xs">Live Synchronization Engine Active</h4>
-                <p className="text-[11px] text-gray-400 leading-relaxed font-light">
-                  Aurelius database controllers are listening live on Firestore. Adding products through this secure terminal automatically updates the catalog, lookbooks, search queries, and inventory grids for all active visitors worldwide in under 200 milliseconds.
-                </p>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* Sub-tab: SKU Stock Ledger */}
-      {activeProductSubTab === "skus" && (
-        <div className="space-y-6 text-white">
-          <div className="bg-[#111111] border border-gray-800 rounded p-6 shadow-md">
-            <h2 className="font-serif text-lg text-white uppercase tracking-tight mb-2">SKU STOCK LEDGER</h2>
-            <p className="text-gray-400 text-xs font-light max-w-3xl mb-6">
-              Manage product variations and SKU-level inventory directly inside the Firestore real-time ledger. Click Save to dispatch a PUT request to synchronise physical inventory across all digital channels.
-            </p>
-
-            {/* Filter Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div>
-                <label className="text-[10px] tracking-wider font-mono text-[#C5A05A] uppercase block mb-1">Search Products / SKUs</label>
-                <input
-                  type="text"
-                  value={skuSearch}
-                  onChange={(e) => setSkuSearch(e.target.value)}
-                  placeholder="e.g. Overlander, AUR-BAG..."
-                  className="w-full bg-[#1A1A1A] border border-gray-800 rounded px-3 py-2 text-xs focus:outline-none focus:border-[#C5A05A] font-mono"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] tracking-wider font-mono text-[#C5A05A] uppercase block mb-1">Category Filter</label>
-                <select
-                  value={skuCategoryFilter}
-                  onChange={(e: any) => setSkuCategoryFilter(e.target.value)}
-                  className="w-full bg-[#1A1A1A] border border-gray-800 rounded px-3 py-2 text-xs focus:outline-none focus:border-[#C5A05A]"
-                >
-                  <option value="all">All Curated Categories</option>
-                  <option value="Travel Bags">Travel Bags</option>
-                  <option value="Shoes">Curated Shoes</option>
-                  <option value="Accessories">Heritage Accessories</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] tracking-wider font-mono text-[#C5A05A] uppercase block mb-1">Stock Level Alert</label>
-                <select
-                  value={skuStockFilter}
-                  onChange={(e: any) => setSkuStockFilter(e.target.value)}
-                  className="w-full bg-[#1A1A1A] border border-gray-800 rounded px-3 py-2 text-xs focus:outline-none focus:border-[#C5A05A]"
-                >
-                  <option value="all">All Variations</option>
-                  <option value="low">Critical Low Stock (&lt; 10 units)</option>
-                  <option value="out">Depleted / Sold Out (0 units)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Ledger Listing */}
-            <div className="space-y-6">
-              {products
-                .filter(p => {
-                  if (skuCategoryFilter !== "all" && p.category !== skuCategoryFilter) return false;
-                  
-                  // Filter by search query
-                  const matchesSearch = p.name.toLowerCase().includes(skuSearch.toLowerCase()) ||
-                    p.category.toLowerCase().includes(skuSearch.toLowerCase()) ||
-                    (p.skus && p.skus.some((s: any) => s.sku.toLowerCase().includes(skuSearch.toLowerCase())));
-                  
-                  if (!matchesSearch) return false;
-
-                  // Filter by stock level
-                  if (skuStockFilter === "low") {
-                    return p.skus && p.skus.some((s: any) => s.inStock < 10);
-                  }
-                  if (skuStockFilter === "out") {
-                    return p.skus && p.skus.some((s: any) => s.inStock === 0);
-                  }
-
-                  return true;
-                })
-                .map((product) => {
-                  const pSkus = product.skus || [];
-                  return (
-                    <div key={product.id} className="border border-gray-850 rounded bg-[#161616] p-5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-850 pb-3 mb-4">
-                        <div>
-                          <span className="font-mono text-[9px] tracking-widest text-[#C5A05A] uppercase block">{product.category}</span>
-                          <h3 className="font-serif text-sm text-white font-medium uppercase tracking-tight">{product.name}</h3>
-                        </div>
-                        <div className="flex items-center space-x-3 text-xs">
-                          <span className="text-gray-400 font-light">
-                            Total Units: <strong className="text-white font-mono">{product.inStock || 0}</strong>
-                          </span>
-                        </div>
-                      </div>
-
-                      {pSkus.length === 0 ? (
-                        <div className="py-4 text-center">
-                          <p className="text-gray-500 text-xs mb-3 font-light">No SKU variation records found for this masterpiece.</p>
-                          <button
-                            onClick={async () => {
-                              // Auto-generate SKUs
-                              const catSlug = product.category.toUpperCase().substring(0, 3);
-                              const prodSlug = product.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").substring(0, 10);
-                              const colors = product.variantColors && product.variantColors.length > 0 
-                                ? product.variantColors 
-                                : ["Masterpiece Black"];
-                              
-                              const generated = colors.map((color: string) => {
-                                const colorSlug = color.toLowerCase().replace(/[^a-z0-9]+/g, "-").substring(0, 10);
-                                return {
-                                  sku: `AUR-${catSlug}-${prodSlug}-${colorSlug}`,
-                                  color,
-                                  inStock: 15
-                                };
-                              });
-
-                              try {
-                                const response = await fetch(`/api/products/${product.id}/skus`, {
-                                  method: "PUT",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ skus: generated })
-                                });
-                                const result = await response.json();
-                                if (response.ok && result.success) {
-                                  alert(`Successfully auto-generated and saved ${generated.length} SKU nodes for this entry.`);
-                                  if (onProductUpdated) onProductUpdated(result.data || result.product);
-                                } else {
-                                  alert(result.error || "Failed to save SKU configurations.");
-                                }
-                              } catch (err: any) {
-                                alert(`Failed to configure SKUs: ${err.message}`);
-                              }
-                            }}
-                            className="px-3 py-1.5 rounded bg-[#C5A05A]/10 text-[#C5A05A] border border-[#C5A05A]/30 hover:bg-[#C5A05A] hover:text-black transition-all text-[10px] tracking-wider uppercase font-mono"
-                          >
-                            Auto-Generate SKU Nodes
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse">
-                            <thead>
-                              <tr className="border-b border-gray-850">
-                                <th className="pb-2 text-[9px] tracking-widest text-gray-500 uppercase font-mono">SKU Code</th>
-                                <th className="pb-2 text-[9px] tracking-widest text-gray-500 uppercase font-mono">Attributes</th>
-                                <th className="pb-2 text-[9px] tracking-widest text-gray-500 uppercase font-mono">Stock Level</th>
-                                <th className="pb-2 text-[9px] tracking-widest text-gray-500 uppercase font-mono text-right">Ledger Adjustments</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {pSkus.map((skuItem: any, index: number) => {
-                                const saveStatus = skuSaveStatus[skuItem.sku];
-                                return (
-                                  <tr key={index} className="border-b border-gray-900/50 hover:bg-white/[0.01]">
-                                    <td className="py-3 font-mono text-[11px] text-[#C5A05A] tracking-wider font-bold">
-                                      {skuItem.sku}
-                                    </td>
-                                    <td className="py-3 text-xs text-gray-300 font-light font-mono">
-                                      {skuItem.color || "Default"}
-                                    </td>
-                                    <td className="py-3">
-                                      <div className="flex items-center space-x-2">
-                                        <span className={`w-1.5 h-1.5 rounded-full ${skuItem.inStock === 0 ? "bg-red-500 animate-pulse" : skuItem.inStock < 10 ? "bg-yellow-500" : "bg-emerald-500"}`} />
-                                        <span className="text-xs font-mono">{skuItem.inStock} units</span>
-                                      </div>
-                                    </td>
-                                    <td className="py-3 text-right">
-                                      <div className="inline-flex items-center space-x-2">
-                                        <button
-                                          onClick={() => {
-                                            const updatedSkus = pSkus.map((sk: any) => sk.sku === skuItem.sku ? { ...sk, inStock: Math.max(0, sk.inStock - 1) } : sk);
-                                            handleUpdateSkuStock(product.id, skuItem.sku, Math.max(0, skuItem.inStock - 1));
-                                            product.skus = updatedSkus;
-                                          }}
-                                          className="w-6 h-6 rounded bg-[#222] hover:bg-[#333] border border-gray-800 text-xs flex items-center justify-center font-mono font-bold"
-                                        >
-                                          -
-                                        </button>
-                                        <input
-                                          type="number"
-                                          value={skuItem.inStock}
-                                          onChange={(e) => {
-                                            const val = parseInt(e.target.value) || 0;
-                                            const updatedSkus = pSkus.map((sk: any) => sk.sku === skuItem.sku ? { ...sk, inStock: val } : sk);
-                                            handleUpdateSkuStock(product.id, skuItem.sku, val);
-                                            product.skus = updatedSkus;
-                                          }}
-                                          className="w-12 bg-black border border-gray-850 rounded text-center text-xs py-0.5 focus:outline-none focus:border-[#C5A05A] font-mono"
-                                        />
-                                        <button
-                                          onClick={() => {
-                                            const updatedSkus = pSkus.map((sk: any) => sk.sku === skuItem.sku ? { ...sk, inStock: sk.inStock + 1 } : sk);
-                                            handleUpdateSkuStock(product.id, skuItem.sku, skuItem.inStock + 1);
-                                            product.skus = updatedSkus;
-                                          }}
-                                          className="w-6 h-6 rounded bg-[#222] hover:bg-[#333] border border-gray-800 text-xs flex items-center justify-center font-mono font-bold"
-                                        >
-                                          +
-                                        </button>
-                                        <button
-                                          onClick={() => handleUpdateSkuStock(product.id, skuItem.sku, skuItem.inStock)}
-                                          className={`ml-2 px-2.5 py-1 rounded text-[9px] font-mono tracking-wider uppercase border transition-all ${
-                                            saveStatus === "saving"
-                                              ? "bg-[#C5A05A]/10 border-[#C5A05A] text-yellow-500 animate-pulse"
-                                              : saveStatus === "saved"
-                                              ? "bg-emerald-950/20 border-emerald-800 text-emerald-400"
-                                              : "bg-[#C5A05A] border-transparent text-black font-bold hover:bg-[#b98b5d]"
-                                          }`}
-                                          disabled={saveStatus === "saving"}
-                                        >
-                                          {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save"}
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Sub-tab: cPanel Deployment Hub */}
-      {activeProductSubTab === "deployment" && (
-        <div className="space-y-8 font-sans">
-          
-          <div className="bg-[#1A1A1A] border border-[#C5A05A]/35 rounded p-6 shadow-md text-white">
-            <div className="flex items-start space-x-4">
-              <div className="p-3 rounded bg-[#C5A05A]/10 text-[#C5A05A] border border-[#C5A05A]/25 shrink-0">
-                <Database className="h-6 w-6" />
-              </div>
-              <div className="space-y-2">
-                <span className="font-mono text-[9px] tracking-[0.25em] text-[#C5A05A] uppercase block">cPanel Server Deployment</span>
-                <h2 className="font-serif text-lg sm:text-xl font-medium tracking-tight text-white uppercase">Namecheap Hosting Migration Hub</h2>
-                <p className="text-xs text-gray-400 leading-relaxed font-light max-w-4xl">
-                  Are you hosting your website on Namecheap cPanel with standard PHP and MySQL? Below are the secure, customized scripts needed to build your inventory table and handle image uploads. Copied code is instantly ready to run in your cPanel environment.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            
-            {/* SQL Table Creation */}
-            <div className="bg-[#1A1A1A] border border-gray-800 rounded p-6 shadow-md flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-3">
-                  <div className="flex items-center space-x-2">
-                    <FileCode className="h-5 w-5 text-[#C5A05A]" />
-                    <h3 className="font-serif text-base font-semibold text-white">MySQL Table Structure</h3>
-                  </div>
-                  
-                  <button
-                    onClick={handleCopySQL}
-                    className="p-1.5 rounded bg-[#111111] hover:bg-[#222222] border border-gray-800 text-[#C5A05A] transition-all flex items-center space-x-1 cursor-pointer"
-                  >
-                    {copiedSQL ? (
-                      <>
-                        <ClipboardCheck className="h-3.5 w-3.5 text-green-400" />
-                        <span className="text-[10px] text-green-400 font-bold font-mono">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span className="text-[10px] font-mono">Copy SQL</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <p className="text-gray-400 text-xs mb-4 leading-relaxed font-light">
-                  Execute this SQL block in your cPanel <strong>phpMyAdmin</strong> SQL query panel to securely generate the <code>products</code> table. It defines optimal column lengths and safety variables.
-                </p>
-
-                <pre className="bg-[#111111] border border-gray-800 rounded p-4 text-[11px] font-mono text-gray-300 overflow-x-auto max-h-72">
-                  {SQL_CODE}
-                </pre>
-              </div>
-
-              <div className="mt-5 pt-3 border-t border-gray-800/60 flex items-center justify-between text-[11px] font-mono text-gray-500">
-                <span>Engines: InnoDB</span>
-                <span>Charset: utf8mb4</span>
-              </div>
-            </div>
-
-            {/* PHP Secure upload.php */}
-            <div className="bg-[#1A1A1A] border border-gray-800 rounded p-6 shadow-md flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-3">
-                  <div className="flex items-center space-x-2">
-                    <FileCode className="h-5 w-5 text-[#C5A05A]" />
-                    <h3 className="font-serif text-base font-semibold text-white">Secure php Upload Portal</h3>
-                  </div>
-                  
-                  <button
-                    onClick={handleCopyPHP}
-                    className="p-1.5 rounded bg-[#111111] hover:bg-[#222222] border border-gray-800 text-[#C5A05A] transition-all flex items-center space-x-1 cursor-pointer"
-                  >
-                    {copiedPHP ? (
-                      <>
-                        <ClipboardCheck className="h-3.5 w-3.5 text-green-400" />
-                        <span className="text-[10px] text-green-400 font-bold font-mono">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span className="text-[10px] font-mono">Copy PHP</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <p className="text-gray-400 text-xs mb-4 leading-relaxed font-light">
-                  Save this code block as <code>upload.php</code> in your server's root. Make sure to replace your database user, password, and db name inside the credentials zone. Features multi-level protection:
-                </p>
-
-                <ul className="text-[11px] text-gray-400 space-y-1 mb-4 list-disc pl-4 font-light">
-                  <li>Explicit Mime-Type check via <code>finfo_file()</code> (blocks executable script injects).</li>
-                  <li>PDO-Prepared queries (safeguarded against standard SQL Injections).</li>
-                  <li>Collision protection via unique hashing filename generators.</li>
-                  <li>Sleek custom dashboard view matching Aurelius' color palette.</li>
-                </ul>
-
-                <pre className="bg-[#111111] border border-gray-800 rounded p-4 text-[11px] font-mono text-gray-300 overflow-x-auto max-h-72">
-                  {PHP_CODE}
-                </pre>
-              </div>
-
-              <div className="mt-5 pt-3 border-t border-gray-800/60 flex items-center justify-between text-[11px] font-mono text-gray-500">
-                <span>File Size Limit: 5MB</span>
-                <span>Type: PDO MySQL Connection</span>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Setup instruction card */}
-          <div className="bg-[#1A1A1A] border border-gray-800 rounded p-6 space-y-4 text-xs">
-            <h3 className="font-serif text-base font-semibold text-white">cPanel Setup Instructions (Namecheap Setup Step-by-Step)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans text-gray-400 leading-relaxed font-light">
-              <div className="space-y-1.5">
-                <div className="flex items-center space-x-2">
-                  <span className="w-5 h-5 rounded-full bg-[#C5A05A] text-black font-mono font-bold flex items-center justify-center text-[10px]">1</span>
-                  <h4 className="font-semibold text-white text-[12px]">Database Setup</h4>
-                </div>
-                <p>Log in to Namecheap cPanel, open "MySQL Database Wizard". Create a database named <code>aurelius_db</code>, assign a user, grant "ALL PRIVILEGES", and save credentials.</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center space-x-2">
-                  <span className="w-5 h-5 rounded-full bg-[#C5A05A] text-black font-mono font-bold flex items-center justify-center text-[10px]">2</span>
-                  <h4 className="font-semibold text-white text-[12px]">Create Table</h4>
-                </div>
-                <p>Open "phpMyAdmin" in cPanel, select your database. Go to the "SQL" query editor, copy-paste the MySQL code block from above, and hit "Go" to spin up the products table.</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center space-x-2">
-                  <span className="w-5 h-5 rounded-full bg-[#C5A05A] text-black font-mono font-bold flex items-center justify-center text-[10px]">3</span>
-                  <h4 className="font-semibold text-white text-[12px]">Upload Scripts</h4>
-                </div>
-                <p>Open cPanel "File Manager" and go to <code>public_html</code>. Create a file named <code>upload.php</code>, paste the PHP block above, and replace lines 3 to 6 with your database credentials. Done!</p>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* Sub-tab: AI Product Hub */}
-      {activeProductSubTab === "importer" && (
-        <div className="space-y-8 font-sans">
-          
-          <div className="bg-[#1A1A1A] border border-[#C5A05A]/35 rounded p-6 shadow-md text-white">
-            <div className="flex items-start space-x-4">
-              <div className="p-3 rounded bg-[#C5A05A]/10 text-[#C5A05A] border border-[#C5A05A]/25 shrink-0">
-                <Sparkles className="h-6 w-6 animate-pulse animate-duration-[3000ms]" />
-              </div>
-              <div className="space-y-2">
-                <span className="font-mono text-[9px] tracking-[0.25em] text-[#C5A05A] uppercase block">AI-Powered Catalog Ingestion</span>
-                <h2 className="font-serif text-lg sm:text-xl font-medium tracking-tight text-white uppercase">AI Product Hub</h2>
-                <p className="text-xs text-gray-400 leading-relaxed font-light max-w-4xl">
-                  Synchronize international marketplace listings directly into Aurelius' high-fidelity luxury database. Enter any valid AliExpress URL below, and our advanced catalog model will scrape, analyze, translate, and enrich the product with premium copywriting, SKU stock mapping, and elegant imagery.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Input Form Column */}
-            <div className="bg-[#1A1A1A] border border-gray-800 rounded p-6 shadow-md lg:col-span-1 space-y-6">
-              <div>
-                <h3 className="font-serif text-base font-semibold text-white mb-2">Artisan Catalog Importer</h3>
-                <p className="text-gray-400 text-xs leading-relaxed font-light">
-                  Input the direct web link of an international masterpiece to translate it into the Aurelius collection.
-                </p>
-              </div>
-
-              <form onSubmit={handleImportAliExpress} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase font-mono tracking-wider text-gray-400">AliExpress Listing URL</label>
-                  <input
-                    type="url"
-                    required
-                    placeholder="https://www.aliexpress.com/item/..."
-                    value={importUrl}
-                    onChange={(e) => setImportUrl(e.target.value)}
-                    className="w-full bg-[#111111] border border-gray-800 rounded px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#C5A05A] transition-colors"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isImporting}
-                  className="w-full py-2.5 rounded bg-[#C5A05A] hover:bg-[#B98B5D] disabled:bg-gray-800 text-black font-semibold font-serif text-xs uppercase tracking-wider transition-colors flex items-center justify-center space-x-2 cursor-pointer"
-                >
-                  {isImporting ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin text-black" />
-                      <span>Translating Catalog...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 text-black" />
-                      <span>Import Masterpiece</span>
-                    </>
-                  )}
-                </button>
-              </form>
-
-              {importError && (
-                <div className="p-4 bg-red-950/40 border border-red-900/50 rounded flex items-start space-x-3 text-xs text-red-200">
-                  <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="font-semibold font-mono text-[10px] tracking-wider uppercase text-red-400">Import Fault Identified</p>
-                    <p className="font-light leading-relaxed">{importError}</p>
-                  </div>
-                </div>
-              )}
-
-              {importSuccess && (
-                <div className="p-4 bg-green-950/40 border border-green-900/50 rounded flex items-start space-x-3 text-xs text-green-200">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="font-semibold font-mono text-[10px] tracking-wider uppercase text-green-400">Success Committed</p>
-                    <p className="font-light leading-relaxed">{importSuccess}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Implemented/Scraped Product Preview Column */}
-            <div className="bg-[#1A1A1A] border border-gray-800 rounded p-6 shadow-md lg:col-span-2 space-y-6">
-              <div className="border-b border-gray-800 pb-3 flex items-center justify-between">
-                <h3 className="font-serif text-base font-semibold text-white">Live Ingestion Preview</h3>
-                <span className="font-mono text-[9px] tracking-widest uppercase text-gray-500">
-                  {importedProduct ? "Catalog Synced" : "Awaiting Ingestion"}
-                </span>
-              </div>
-
-              {importedProduct ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Product Left Section: Photo & Identity */}
-                  <div className="space-y-4">
-                    <div className="aspect-square w-full rounded overflow-hidden border border-gray-800 bg-[#111111] relative group">
-                      <img
-                        src={importedProduct.images?.[0] || importedProduct.image || "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&q=80&w=1200"}
-                        alt={importedProduct.name}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute top-2 left-2 px-2 py-1 bg-black/80 border border-[#C5A05A]/40 rounded text-[9px] font-mono uppercase text-[#C5A05A] tracking-wider">
-                        {importedProduct.category}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <span className="font-mono text-[9px] text-[#C5A05A] tracking-wider uppercase block">{importedProduct.subcategory}</span>
-                      <h4 className="font-serif text-lg font-bold text-white tracking-tight">{importedProduct.name}</h4>
-                      <div className="flex items-center space-x-3">
-                        <span className="text-base font-serif font-semibold text-[#C5A05A]">${importedProduct.price}</span>
-                        {importedProduct.originalPrice && (
-                          <span className="text-xs font-light text-gray-500 line-through">${importedProduct.originalPrice}</span>
-                        )}
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-green-950/50 border border-green-900/50 text-green-400 font-mono">
-                          {importedProduct.inStock} In Stock
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Product Right Section: Specifications & Copywriting */}
-                  <div className="space-y-4 flex flex-col justify-between">
-                    <div className="space-y-4">
-                      <div>
-                        <span className="text-[9px] uppercase font-mono tracking-wider text-gray-500 block mb-1">Bespoke Copywriting</span>
-                        <p className="text-xs text-gray-400 leading-relaxed font-light">{importedProduct.description}</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <span className="text-[9px] uppercase font-mono tracking-wider text-gray-500 block">Enriched Features</span>
-                        <ul className="text-xs text-gray-400 space-y-1.5 list-disc pl-4 font-light">
-                          {importedProduct.features?.slice(0, 4).map((feat, index) => (
-                            <li key={index}>{feat}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-900">
-                        <div>
-                          <span className="text-[8px] uppercase font-mono tracking-wider text-gray-500 block">SKU Identity</span>
-                          <span className="text-xs font-mono text-gray-300">{importedProduct.SKU}</span>
-                        </div>
-                        <div>
-                          <span className="text-[8px] uppercase font-mono tracking-wider text-gray-500 block">Dimensions</span>
-                          <span className="text-xs text-gray-300 font-light">{importedProduct.dimensions}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-gray-900 flex items-center justify-between">
-                      <div className="flex space-x-1.5">
-                        {importedProduct.variantColorsHex?.slice(0, 3).map((hex, index) => (
-                          <span
-                            key={index}
-                            title={importedProduct.variantColors?.[index]}
-                            className="w-4 h-4 rounded-full border border-gray-800"
-                            style={{ backgroundColor: hex }}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-[10px] font-mono text-gray-500">Source: {importedProduct.supplier || "AliExpress"}</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-80 border border-dashed border-gray-800 rounded flex flex-col items-center justify-center text-center p-8 text-gray-500">
-                  <Sparkles className="h-10 w-10 text-gray-700 mb-3 animate-pulse" />
-                  <p className="font-serif text-sm font-medium text-gray-400 mb-1">Awaiting Ingestion Stream</p>
-                  <p className="text-xs text-gray-600 max-w-sm leading-relaxed font-light">
-                    Supply a valid AliExpress product listing URL on the left panel to translate and view the enriched masterpiece preview in real time.
-                  </p>
-                </div>
-              )}
-            </div>
-
-          </div>
-
-        </div>
-      )}
-        </div>
-      )}
-
-      {/* RENDER BLOG TAB */}
-      {activeTab === "blog" && (
-        <div id="blog-editor-anchor" className="space-y-8 font-sans scroll-mt-6 text-white">
-          <div className="bg-[#111111] border border-gray-800 rounded p-6 shadow-md">
-            <h2 className="font-serif text-lg text-white uppercase tracking-tight mb-2">AURELIUS EDITORIAL HUB</h2>
-            <p className="text-gray-400 text-xs font-light max-w-3xl mb-6">
-              Create, curate, and publish high-fidelity editorial logs directly to the Aurelius Digital Library. Content published here is stored in your Firestore database and serves as lookbook logs for VIP patrons.
-            </p>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Blog Form Column */}
-              <div className="lg:col-span-5 bg-[#1A1A1A] border border-gray-800 rounded p-6 shadow-sm">
-                <h3 className="font-serif text-sm text-[#C5A05A] uppercase tracking-wider mb-4 pb-2 border-b border-gray-850">
-                  {editingBlogId ? "Modify Editorial Volume" : "Compose New Volume"}
-                </h3>
-
-                {blogSubmitSuccess && (
-                  <div className="p-3 mb-4 bg-emerald-950/30 border border-emerald-800 text-emerald-400 rounded text-xs flex items-center space-x-2">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span>{blogSubmitSuccess}</span>
-                  </div>
-                )}
-
-                {blogSubmitError && (
-                  <div className="p-3 mb-4 bg-red-950/30 border border-red-800 text-red-400 rounded text-xs flex items-center space-x-2">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>{blogSubmitError}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handlePublishBlog} className="space-y-4">
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Article Title *</label>
-                    <input
-                      type="text"
-                      value={blogFormTitle}
-                      onChange={(e) => setBlogFormTitle(e.target.value)}
-                      placeholder="e.g. The Scent of Florentine Workshops"
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A]"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
+                {/* Left Panel: Collections Builder Form (Span 4) */}
+                <div className={`md:col-span-4 p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg flex flex-col justify-between`}>
+                  <form onSubmit={handleCreateCollection} className="space-y-4">
                     <div>
-                      <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Category *</label>
+                      <h3 className="font-serif text-lg font-medium text-white">Collection Builder</h3>
+                      <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest block">Custom craft a new curated group</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Collection Name *</label>
+                      <input 
+                        type="text"
+                        value={newCollectionName}
+                        onChange={(e) => setNewCollectionName(e.target.value)}
+                        placeholder="e.g. Tuscan Leather Travel"
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Concept Narrative / Description</label>
+                      <textarea 
+                        value={newCollectionDesc}
+                        onChange={(e) => setNewCollectionDesc(e.target.value)}
+                        placeholder="Concept story and curation details..."
+                        rows={3}
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Custom Badge / Tagline</label>
+                      <input 
+                        type="text"
+                        value={newCollectionBadge}
+                        onChange={(e) => setNewCollectionBadge(e.target.value)}
+                        placeholder="e.g. Summer Capsule, Heritage Edition"
+                        className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      />
+                    </div>
+
+                    <div className="space-y-2 py-1">
+                      <label className="flex items-center space-x-2 select-none cursor-pointer">
+                        <input 
+                          type="checkbox"
+                          checked={isFeaturedCollection}
+                          onChange={(e) => setIsFeaturedCollection(e.target.checked)}
+                          className="rounded border-gray-800 text-[#C5A05A] focus:ring-0"
+                        />
+                        <span className="text-xs text-gray-300">Feature prominently on Homepage</span>
+                      </label>
+
+                      <label className="flex items-center space-x-2 select-none cursor-pointer">
+                        <input 
+                          type="checkbox"
+                          checked={newCollectionPublished}
+                          onChange={(e) => setNewCollectionPublished(e.target.checked)}
+                          className="rounded border-gray-800 text-emerald-500 focus:ring-0"
+                        />
+                        <span className="text-xs text-gray-300">Publish Immediately (Visible to Public)</span>
+                      </label>
+                    </div>
+
+                    {/* Pre-assign inventory items */}
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">
+                        Pre-assign Masterpieces ({newCollectionProductIds.length} Selected)
+                      </label>
+                      <div className="max-h-36 overflow-y-auto space-y-1 bg-[#181818] border border-gray-800 rounded p-2">
+                        {products.map(p => {
+                          const isAssigned = newCollectionProductIds.includes(p.id);
+                          return (
+                            <label key={p.id} className="flex items-center justify-between text-[11px] text-gray-300 hover:text-white cursor-pointer py-0.5">
+                              <span className="truncate pr-2 font-serif">{p.name}</span>
+                              <input 
+                                type="checkbox"
+                                checked={isAssigned}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setNewCollectionProductIds(prev => [...prev, p.id]);
+                                  } else {
+                                    setNewCollectionProductIds(prev => prev.filter(id => id !== p.id));
+                                  }
+                                }}
+                                className="rounded border-gray-800 text-[#C5A05A] focus:ring-0"
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <button 
+                      type="submit"
+                      className="w-full bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white py-2.5 rounded uppercase font-semibold text-xs tracking-wider transition-colors shadow flex items-center justify-center space-x-1.5"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Generate Collection</span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Right Panel: Collections Grid & Bulk Actions (Span 8) */}
+                <div className={`md:col-span-8 p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg space-y-5`}>
+                  
+                  {/* Top Bar: Title & Search/Filter Controls */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-850">
+                    <div>
+                      <h3 className="font-serif text-lg font-medium text-white">Curated Collections Archives</h3>
+                      <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest block">
+                        Managing {collections.length} active collection(s) inside Aurelius database
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Search className="h-3.5 w-3.5 text-gray-500 absolute left-2.5 top-2.5" />
+                        <input 
+                          type="text"
+                          value={collectionSearch}
+                          onChange={(e) => setCollectionSearch(e.target.value)}
+                          placeholder="Search collections..."
+                          className="pl-8 pr-3 py-1.5 bg-[#181818] border border-gray-800 rounded text-xs text-white outline-none focus:border-[#C5A05A] w-36 sm:w-44"
+                        />
+                      </div>
+
                       <select
-                        value={blogFormCategory}
-                        onChange={(e) => setBlogFormCategory(e.target.value)}
-                        className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A]"
+                        value={collectionStatusFilter}
+                        onChange={(e: any) => setCollectionStatusFilter(e.target.value)}
+                        className="bg-[#181818] border border-gray-800 text-xs text-gray-300 rounded px-2.5 py-1.5 outline-none focus:border-[#C5A05A]"
                       >
-                        <option value="Lifestyle">Lifestyle</option>
-                        <option value="Heritage">Heritage</option>
-                        <option value="Artistry">Artistry</option>
-                        <option value="Atelier">Atelier</option>
-                        <option value="Curation">Curation</option>
+                        <option value="all">All Statuses</option>
+                        <option value="published">Published Only</option>
+                        <option value="draft">Drafts / Hidden</option>
+                        <option value="featured">Homepage Featured</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Read Time</label>
-                      <input
-                        type="text"
-                        value={blogFormReadTime}
-                        onChange={(e) => setBlogFormReadTime(e.target.value)}
-                        placeholder="e.g. 4 min read"
-                        className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A]"
-                      />
+                  </div>
+
+                  {/* BULK ACTIONS TOOLBAR */}
+                  {selectedCollectionIds.length > 0 && (
+                    <div className="p-3 bg-gradient-to-r from-amber-500/20 via-[#211b10] to-amber-500/20 border border-amber-500/40 rounded-lg flex flex-wrap items-center justify-between gap-3 shadow-md animate-fadeIn">
+                      <div className="flex items-center space-x-2 text-xs font-mono text-amber-300">
+                        <CheckSquare className="h-4 w-4 text-amber-400" />
+                        <span className="font-bold">{selectedCollectionIds.length} Collection(s) Selected</span>
+                      </div>
+
+                      <div className="flex items-center flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleBulkPublishCollections(true)}
+                          className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors flex items-center space-x-1"
+                          title="Publish selected collections to storefront"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>Publish ({selectedCollectionIds.length})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleBulkPublishCollections(false)}
+                          className="bg-gray-750 hover:bg-gray-700 text-gray-200 px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors flex items-center space-x-1 border border-gray-650"
+                          title="Unpublish selected collections (Move to Draft)"
+                        >
+                          <EyeOff className="h-3.5 w-3.5" />
+                          <span>Unpublish ({selectedCollectionIds.length})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleBulkDeleteCollections}
+                          className="bg-red-600/80 hover:bg-red-500 text-white px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors flex items-center space-x-1"
+                          title="Permanently delete selected collections"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Delete ({selectedCollectionIds.length})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCollectionIds([])}
+                          className="text-gray-400 hover:text-white p-1 text-xs"
+                          title="Clear Selection"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
+                  )}
+
+                  {/* SELECT ALL HEADER BAR */}
+                  <div className="flex items-center justify-between px-2 py-1 bg-[#161616] border border-gray-850 rounded text-xs text-gray-400 font-mono">
+                    <label className="flex items-center space-x-2 cursor-pointer select-none">
+                      <input 
+                        type="checkbox"
+                        checked={isAllFilteredSelected}
+                        onChange={() => handleSelectAllFilteredCollections(filteredCollections)}
+                        className="rounded border-gray-800 text-[#C5A05A] focus:ring-0"
+                      />
+                      <span>Select All Filtered ({filteredCollections.length})</span>
+                    </label>
+                    <span>
+                      Showing {filteredCollections.length} of {collections.length} Collections
+                    </span>
                   </div>
 
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Hero Image URL</label>
-                    <input
-                      type="text"
-                      value={blogFormImage}
-                      onChange={(e) => setBlogFormImage(e.target.value)}
-                      placeholder="https://images.unsplash.com/photo-..."
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A] font-mono"
-                    />
-                  </div>
+                  {/* COLLECTIONS LIST */}
+                  <div className="space-y-4 max-h-[520px] overflow-y-auto pr-1">
+                    {filteredCollections.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500 font-mono text-xs">
+                        No collections matched the current filter criteria.
+                      </div>
+                    ) : (
+                      filteredCollections.map(col => {
+                        const isSelected = selectedCollectionIds.includes(col.id);
+                        const isPublished = col.isPublished !== false;
 
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Tags (Comma Separated)</label>
-                    <input
-                      type="text"
-                      value={blogFormTags}
-                      onChange={(e) => setBlogFormTags(e.target.value)}
-                      placeholder="Tannery, Heritage, Florence"
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A]"
-                    />
-                  </div>
+                        return (
+                          <div 
+                            key={col.id} 
+                            className={`p-4 rounded-lg border flex flex-col justify-between gap-3 transition-all ${
+                              isSelected 
+                                ? "bg-[#181610] border-amber-500/50 shadow-md" 
+                                : "bg-[#141414] border-gray-850 hover:border-gray-750"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start space-x-3">
+                                {/* Selection Checkbox */}
+                                <input 
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleToggleSelectCollection(col.id)}
+                                  className="mt-1 rounded border-gray-800 text-[#C5A05A] focus:ring-0 cursor-pointer"
+                                />
 
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Brief Excerpt</label>
-                    <textarea
-                      value={blogFormExcerpt}
-                      onChange={(e) => setBlogFormExcerpt(e.target.value)}
-                      rows={2}
-                      placeholder="Brief meta description summarizing this curation..."
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A] font-sans"
-                    />
-                  </div>
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="font-serif text-base font-semibold text-white">{col.name}</h4>
+                                    
+                                    {col.badge && (
+                                      <span className="bg-[#C5A05A]/15 text-[#C5A05A] border border-[#C5A05A]/30 text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold">
+                                        {col.badge}
+                                      </span>
+                                    )}
 
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Editorial Content (Markdown Supported) *</label>
-                    <textarea
-                      value={blogFormContent}
-                      onChange={(e) => setBlogFormContent(e.target.value)}
-                      rows={8}
-                      placeholder="Deeply describe the exquisite details, stories, and history of this masterpiece selection..."
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A] font-sans leading-relaxed"
-                    />
-                  </div>
+                                    {/* Published Status Badge */}
+                                    {isPublished ? (
+                                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center space-x-1">
+                                        <Eye className="h-2.5 w-2.5" />
+                                        <span>Published</span>
+                                      </span>
+                                    ) : (
+                                      <span className="bg-gray-800 text-gray-400 border border-gray-700 text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center space-x-1">
+                                        <EyeOff className="h-2.5 w-2.5" />
+                                        <span>Draft / Hidden</span>
+                                      </span>
+                                    )}
 
-                  <div className="flex space-x-2 pt-2">
-                    <button
-                      type="submit"
-                      className="flex-1 px-4 py-2 bg-[#C5A05A] text-black font-mono font-bold text-xs tracking-wider uppercase rounded hover:bg-[#b98b5d] transition-all flex items-center justify-center space-x-2"
-                    >
-                      <Send className="h-3 w-3" />
-                      <span>{editingBlogId ? "Apply Edits" : "Publish to Library"}</span>
-                    </button>
-                    {editingBlogId && (
-                      <button
-                        type="button"
-                        onClick={resetBlogForm}
-                        className="px-3 py-2 bg-gray-800 text-white font-mono text-xs uppercase rounded hover:bg-gray-700 transition-all border border-gray-700"
-                      >
-                        Reset
-                      </button>
+                                    {/* Featured Badge */}
+                                    {col.isFeatured && (
+                                      <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center space-x-1">
+                                        <Star className="h-2.5 w-2.5 fill-amber-500" />
+                                        <span>Homepage Featured</span>
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <p className="text-xs text-gray-400 font-light leading-relaxed">
+                                    {col.description || "No concept narrative provided."}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {/* Quick Item Actions */}
+                              <div className="flex items-center space-x-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleSinglePublish(col)}
+                                  className={`p-1.5 rounded transition-colors ${
+                                    isPublished 
+                                      ? "text-emerald-400 hover:bg-emerald-950/50" 
+                                      : "text-gray-500 hover:text-emerald-400 hover:bg-gray-800"
+                                  }`}
+                                  title={isPublished ? "Unpublish (Move to Draft)" : "Publish Collection"}
+                                >
+                                  {isPublished ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleSingleFeatured(col)}
+                                  className={`p-1.5 rounded transition-colors ${
+                                    col.isFeatured 
+                                      ? "text-amber-400 hover:bg-amber-950/50" 
+                                      : "text-gray-500 hover:text-amber-400 hover:bg-gray-800"
+                                  }`}
+                                  title={col.isFeatured ? "Remove from Homepage Featured" : "Mark as Homepage Featured"}
+                                >
+                                  <Star className={`h-4 w-4 ${col.isFeatured ? "fill-amber-400" : ""}`} />
+                                </button>
+
+                                <button 
+                                  type="button"
+                                  onClick={async () => {
+                                    if (confirm(`Do you want to delete collection "${col.name}"?`)) {
+                                      await fetch(`/api/collections/${col.id}`, { method: "DELETE" });
+                                      fetchAllData();
+                                    }
+                                  }}
+                                  className="text-gray-500 hover:text-red-400 p-1.5 rounded hover:bg-red-950/30 transition-colors"
+                                  title="Delete Collection"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Products mapped to this collection */}
+                            <div className="space-y-2 pt-2 border-t border-gray-800">
+                              <div className="flex items-center justify-between">
+                                <span className="block text-[9px] uppercase tracking-wider text-gray-500 font-bold font-mono">
+                                  Assigned Masterpieces ({col.productIds ? col.productIds.length : 0}):
+                                </span>
+
+                                {/* Quick inline Product assigner */}
+                                <select
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      handleAddProductToCollection(col, e.target.value);
+                                      e.target.value = "";
+                                    }
+                                  }}
+                                  className="bg-[#0f0f0f] border border-gray-800 text-[10px] text-gray-400 rounded px-2 py-0.5 outline-none focus:border-[#C5A05A]"
+                                >
+                                  <option value="">+ Assign Masterpiece...</option>
+                                  {products
+                                    .filter(p => !col.productIds || !col.productIds.includes(p.id))
+                                    .map(p => (
+                                      <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))
+                                  }
+                                </select>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                {col.productIds && col.productIds.length > 0 ? (
+                                  col.productIds.map((pid: string) => {
+                                    const match = products.find(p => p.id === pid);
+                                    return (
+                                      <div key={pid} className="flex items-center space-x-1.5 bg-[#0f0f0f] border border-gray-850 rounded pl-2 pr-1.5 py-1 text-[10px]">
+                                        <span className="text-gray-300 font-serif truncate max-w-44">{match ? match.name : pid}</span>
+                                        <button 
+                                          type="button"
+                                          onClick={() => handleRemoveProductFromCollection(col, pid)}
+                                          className="text-gray-500 hover:text-red-400 text-xs font-bold font-mono px-0.5 hover:bg-gray-800 rounded"
+                                          title="Remove from collection"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <span className="text-xs text-gray-500 font-light font-mono">
+                                    No products assigned yet. Use the dropdown above to add items.
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
-                </form>
-              </div>
-
-              {/* Blog List Column */}
-              <div className="lg:col-span-7 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-gray-850">
-                  <h3 className="font-serif text-sm text-[#C5A05A] uppercase tracking-wider">
-                    Published Curation Logs ({blogsList.length})
-                  </h3>
-                  <button
-                    onClick={fetchBlogs}
-                    className="p-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
-                    title="Force Database Synchronisation"
-                  >
-                    <RefreshCw className="h-3 w-3" />
-                  </button>
                 </div>
 
-                {isFetchingBlogs ? (
-                  <div className="py-12 text-center text-gray-500 font-light">
-                    <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-3 text-[#C5A05A]" />
-                    <span>Synchronising curation archives...</span>
-                  </div>
-                ) : blogsList.length === 0 ? (
-                  <div className="py-12 border border-dashed border-gray-800 rounded text-center text-gray-500 font-light">
-                    <BookOpen className="h-8 w-8 mx-auto mb-2 text-gray-750" />
-                    <p>No published articles exist in this digital archive.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {blogsList.map((blog) => (
-                      <div key={blog.id} className="bg-[#161616] border border-gray-850 rounded overflow-hidden flex flex-col h-full hover:border-[#C5A05A]/30 transition-all">
-                        <div className="h-36 bg-gray-900 relative">
-                          <img
-                            src={blog.image}
-                            alt={blog.title}
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                          <span className="absolute top-2 left-2 bg-[#C5A05A] text-black font-mono text-[8px] font-bold tracking-widest px-1.5 py-0.5 uppercase rounded-sm shadow">
-                            {blog.category}
-                          </span>
-                        </div>
-                        <div className="p-4 flex flex-col flex-1 space-y-2">
-                          <div className="flex items-center justify-between text-[9px] font-mono text-gray-500">
-                            <span>{blog.date}</span>
-                            <span>{blog.readTime || "5 min read"}</span>
-                          </div>
-                          <h4 className="font-serif text-sm font-medium uppercase text-white line-clamp-1">{blog.title}</h4>
-                          <p className="text-gray-400 text-xs font-light line-clamp-3 leading-relaxed flex-1">
-                            {blog.excerpt || blog.content?.substring(0, 100) + "..."}
-                          </p>
+              </div>
+            </div>
+          );
+        })()}
 
-                          <div className="flex justify-end space-x-2 pt-3 border-t border-gray-850/50 mt-auto">
-                            <button
-                              onClick={() => handleEditBlog(blog)}
-                              className="px-2.5 py-1 text-[9px] font-mono tracking-wider uppercase rounded bg-[#222] border border-gray-800 text-gray-300 hover:text-white hover:bg-gray-800 transition-all flex items-center space-x-1"
-                            >
-                              <Edit className="h-2.5 w-2.5 text-[#C5A05A]" />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeleteBlog(blog.id)}
-                              className="px-2.5 py-1 text-[9px] font-mono tracking-wider uppercase rounded bg-red-950/10 border border-red-900/30 text-red-400 hover:bg-red-950/30 transition-all flex items-center space-x-1"
-                            >
-                              <Trash2 className="h-2.5 w-2.5" />
-                              <span>Purge</span>
-                            </button>
-                          </div>
+        {/* 4. ORDERS VIEW */}
+        {activeMenu === "orders" && (
+          <div className="space-y-8">
+            <div className={`p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg`}>
+              <div className="mb-6">
+                <h3 className="font-serif text-lg font-medium text-white">Customer Orders Pipeline</h3>
+                <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest block mt-0.5">Track, edit tracking numbers and process shipments</span>
+              </div>
+
+              {/* Grid or Kanban Pipeline */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-gray-400">
+                  <thead>
+                    <tr className="border-b border-gray-800 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                      <th className="py-3">Order ID</th>
+                      <th>Date Requested</th>
+                      <th>Patron Client</th>
+                      <th>DHL Shipping Destination</th>
+                      <th>Total Amount</th>
+                      <th>Order Pipeline Status</th>
+                      <th className="text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-850/40">
+                    {orders.map(o => (
+                      <tr key={o.id} className="hover:bg-neutral-800/10 transition-colors">
+                        <td className="py-3.5 font-mono text-white font-semibold">{o.id}</td>
+                        <td className="font-mono text-gray-400">{new Date(o.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
+                        <td>
+                          <div className="font-medium text-gray-300">{o.customerName}</div>
+                          <div className="text-[10px] text-gray-500">{o.customerEmail}</div>
+                        </td>
+                        <td className="max-w-xs truncate">{o.shippingAddress || "Complimentary Atelier Delivery"}</td>
+                        <td className="font-mono text-white font-medium">{formatPrice(o.total, storeSettings.baseCurrency)}</td>
+                        <td>
+                          <select 
+                            value={o.status || "New"}
+                            onChange={(e) => handleUpdateOrderStatus(o.id, { status: e.target.value })}
+                            className="bg-[#181818] border border-gray-800 rounded px-2.5 py-1 text-[10px] uppercase tracking-wider font-mono font-bold text-gray-300 outline-none focus:border-[#C5A05A]"
+                          >
+                            <option value="New">New</option>
+                            <option value="Processing">Processing</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Delivered">Delivered</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+                        </td>
+                        <td className="text-right">
+                          <button 
+                            onClick={() => setViewingOrder(o)}
+                            className="bg-neutral-800 hover:bg-[#C5A05A]/10 hover:text-[#C5A05A] transition-colors rounded px-3 py-1.5 uppercase font-mono font-bold text-[9px] text-gray-300 border border-transparent"
+                          >
+                            Inspect
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {orders.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-gray-500 font-mono">
+                          No orders registered inside database.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Viewing detailed order modal pop up */}
+            {viewingOrder && (
+              <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-[#111111] text-white border border-[#C5A05A]/25 max-w-xl w-full rounded-xl shadow-2xl relative overflow-hidden p-6 space-y-6">
+                  <button 
+                    onClick={() => setViewingOrder(null)}
+                    className="absolute top-4 right-4 p-1 hover:bg-neutral-800 text-gray-400 hover:text-white rounded-full"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+
+                  <div className="border-b border-gray-800 pb-4">
+                    <span className="text-[9px] uppercase tracking-widest font-mono text-amber-500">DHL Shipping Manifest</span>
+                    <h3 className="font-serif text-xl font-medium mt-1">Order Inspection: {viewingOrder.id}</h3>
+                  </div>
+
+                  {/* Customer Spec */}
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <span className="block text-[9px] uppercase tracking-wider text-gray-500 font-bold font-mono">Patron Client</span>
+                      <p className="text-gray-200 mt-1">{viewingOrder.customerName}</p>
+                      <p className="text-gray-400 font-mono text-[10px]">{viewingOrder.customerEmail}</p>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] uppercase tracking-wider text-gray-500 font-bold font-mono">Escrow Gateway</span>
+                      <p className="text-[#C5A05A] mt-1 font-mono uppercase text-[10px]">{viewingOrder.gateway || "Paystack"}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="block text-[9px] uppercase tracking-wider text-gray-500 font-bold font-mono">Atelier Destination Address</span>
+                      <p className="text-gray-300 mt-1">{viewingOrder.shippingAddress || "Complimentary Private Courier pickup"}</p>
+                    </div>
+                  </div>
+
+                  {/* Ordered Items list */}
+                  <div className="border-t border-b border-gray-850 py-4 space-y-3">
+                    <span className="block text-[9px] uppercase tracking-wider text-gray-500 font-bold font-mono mb-1">Purchased Masterpieces</span>
+                    {viewingOrder.items && viewingOrder.items.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-xs">
+                        <div>
+                          <p className="font-serif text-gray-200">{item.product?.name || item.productName}</p>
+                          <span className="text-[10px] text-gray-500 font-mono">Color: {item.selectedColor || item.color || "Default"} • Qty: {item.quantity}</span>
                         </div>
+                        <span className="font-mono text-white">{formatPrice((item.product?.price || item.price || 0) * item.quantity, storeSettings.baseCurrency)}</span>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* RENDER WALLET TAB */}
-      {activeTab === "wallet" && (
-        <div className="space-y-8 font-sans text-white">
-          <div className="bg-[#111111] border border-gray-800 rounded p-6 shadow-md">
-            <h2 className="font-serif text-lg text-white uppercase tracking-tight mb-2">TREASURY & LEDGER HUB</h2>
-            <p className="text-gray-400 text-xs font-light max-w-3xl mb-6">
-              Track capital allocation pipelines, settled client wire transfers, active logistics payouts, and sovereign reserves in real time.
-            </p>
+                  {/* Pricing manifest summary */}
+                  <div className="space-y-1.5 text-xs text-right font-mono">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">MSRP Subtotal:</span>
+                      <span className="text-white">{formatPrice(viewingOrder.subtotal || viewingOrder.total, storeSettings.baseCurrency)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">DHL Express Shipping:</span>
+                      <span className="text-white">{viewingOrder.shippingCost === 0 ? "FREE" : formatPrice(viewingOrder.shippingCost || 25, storeSettings.baseCurrency)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-gray-800 pt-1.5 text-sm font-bold text-[#C5A05A]">
+                      <span>Grand Escrow Total:</span>
+                      <span>{formatPrice(viewingOrder.total, storeSettings.baseCurrency)}</span>
+                    </div>
+                  </div>
 
-            {/* Balances Bento Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-[#1A1A1A] border border-[#C5A05A]/25 rounded p-5 relative overflow-hidden flex flex-col justify-between h-32">
-                <span className="text-[9px] font-mono text-[#C5A05A] tracking-wider uppercase">Active Liquid Treasury</span>
-                <div className="space-y-1">
-                  <h3 className="font-serif text-2xl sm:text-3.5xl font-bold tracking-tight text-white font-mono">
-                    ${walletBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </h3>
-                  <p className="text-[10px] text-gray-500 font-light">Fully settled and ready for operational disbursement</p>
-                </div>
-                <div className="absolute right-3 bottom-3 text-white/5 font-mono text-6xl select-none font-bold">USD</div>
-              </div>
+                  {/* Order tracking number edit */}
+                  <div className="pt-2 border-t border-gray-850 flex items-center space-x-3 text-xs">
+                    <div className="flex-grow">
+                      <label className="block text-[9px] uppercase tracking-wider text-gray-500 font-bold font-mono mb-1">DHL Airway Bill Tracking Number</label>
+                      <input 
+                        type="text"
+                        value={viewingOrder.trackingNumber || ""}
+                        onChange={(e) => handleUpdateOrderStatus(viewingOrder.id, { trackingNumber: e.target.value })}
+                        placeholder="e.g. DHL-9922883"
+                        className="w-full bg-[#181818] border border-gray-850 rounded px-2.5 py-1.5 outline-none focus:border-[#C5A05A] font-mono text-white"
+                      />
+                    </div>
 
-              <div className="bg-[#1A1A1A] border border-gray-850 rounded p-5 relative overflow-hidden flex flex-col justify-between h-32">
-                <span className="text-[9px] font-mono text-gray-400 tracking-wider uppercase">Patron Escrow Reserves</span>
-                <div className="space-y-1">
-                  <h3 className="font-serif text-2xl sm:text-3.5xl font-bold tracking-tight text-[#C5A05A] font-mono">
-                    ${walletEscrow.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </h3>
-                  <p className="text-[10px] text-gray-500 font-light">Committed pre-order reserves secured under Smart Escrow</p>
-                </div>
-                <div className="absolute right-3 bottom-3 text-white/5 font-mono text-6xl select-none font-bold">ESC</div>
-              </div>
-
-              <div className="bg-[#1A1A1A] border border-gray-850 rounded p-5 relative overflow-hidden flex flex-col justify-between h-32">
-                <span className="text-[9px] font-mono text-gray-400 tracking-wider uppercase">Treasury Currency Config</span>
-                <div className="space-y-2">
-                  <div className="flex space-x-1">
-                    {["USD", "EUR", "GBP", "JPY"].map((curr) => (
-                      <button
-                        key={curr}
-                        onClick={() => {
-                          if (curr === walletCurrency) return;
-                          let mult = 1;
-                          if (curr === "EUR") mult = 0.92;
-                          else if (curr === "GBP") mult = 0.78;
-                          else if (curr === "JPY") mult = 158.2;
-                          
-                          let baseVal = 142580.00;
-                          setWalletBalance(baseVal * mult);
-                          setWalletCurrency(curr);
-                        }}
-                        className={`px-3 py-1 text-[10px] font-mono uppercase rounded transition-all border ${
-                          walletCurrency === curr
-                            ? "bg-[#C5A05A] text-black border-[#C5A05A] font-bold"
-                            : "bg-black text-gray-400 border-gray-800 hover:text-white"
-                        }`}
+                    <div>
+                      <label className="block text-[9px] uppercase tracking-wider text-gray-500 font-bold font-mono mb-1">Payment Escrow status</label>
+                      <select 
+                        value={viewingOrder.paymentStatus || "Paid"}
+                        onChange={(e) => handleUpdateOrderStatus(viewingOrder.id, { paymentStatus: e.target.value })}
+                        className="bg-[#181818] border border-gray-850 rounded px-2.5 py-1.5 outline-none focus:border-[#C5A05A] font-mono font-bold"
                       >
-                        {curr}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-gray-500 font-light">Current system reference currency. Values scale dynamically.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Dispatch Payout */}
-              <div className="lg:col-span-5 bg-[#1A1A1A] border border-gray-800 rounded p-6 shadow-sm">
-                <h3 className="font-serif text-sm text-[#C5A05A] uppercase tracking-wider mb-4 pb-2 border-b border-gray-850">
-                  Dispatch Capital Payout
-                </h3>
-                <form onSubmit={handleWalletTransfer} className="space-y-4">
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Select Cooperative / Recipient *</label>
-                    <input
-                      type="text"
-                      required
-                      value={withdrawalRecipient}
-                      onChange={(e) => setWithdrawalRecipient(e.target.value)}
-                      placeholder="e.g. Florence Craftsmanship Cooperatives"
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Disbursement Amount ({walletCurrency}) *</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-gray-500 font-mono text-xs">{walletCurrency === "JPY" ? "¥" : "$"}</span>
-                      <input
-                        type="number"
-                        required
-                        value={withdrawalAmount}
-                        onChange={(e) => setWithdrawalAmount(e.target.value)}
-                        placeholder="e.g. 5000"
-                        className="w-full bg-black border border-gray-850 rounded pl-7 pr-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A] font-mono font-bold text-yellow-500"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Disbursement Memo</label>
-                    <input
-                      type="text"
-                      placeholder="Settlement for Masterpiece Leather hide shipment"
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A]"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full px-4 py-2 bg-[#C5A05A] text-black font-mono font-bold text-xs tracking-wider uppercase rounded hover:bg-[#b98b5d] transition-all flex items-center justify-center space-x-2"
-                  >
-                    <Wallet className="h-4 w-4" />
-                    <span>Authorize Wire disbursement</span>
-                  </button>
-                </form>
-              </div>
-
-              {/* Historic Ledger Payouts */}
-              <div className="lg:col-span-7 space-y-4">
-                <h3 className="font-serif text-sm text-[#C5A05A] uppercase tracking-wider pb-2 border-b border-gray-850">
-                  Treasury Ledger Transactions History
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-gray-850 text-gray-500 font-mono text-[9px] uppercase tracking-wider">
-                        <th className="pb-2">Disbursement ID</th>
-                        <th className="pb-2">Valuation Date</th>
-                        <th className="pb-2">Destination / Guild</th>
-                        <th className="pb-2">Debit Amount</th>
-                        <th className="pb-2 text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {walletPayouts.map((pay) => (
-                        <tr key={pay.id} className="border-b border-gray-900 text-xs font-light">
-                          <td className="py-3 font-mono text-[10px] text-[#C5A05A]">{pay.id.substring(0, 12)}</td>
-                          <td className="py-3 text-gray-400 font-mono text-[10px]">{pay.date}</td>
-                          <td className="py-3 text-white uppercase font-mono text-[10px] tracking-tight">{pay.destination}</td>
-                          <td className="py-3 font-mono font-bold text-[#C5A05A]">
-                            -{walletCurrency === "JPY" ? "¥" : "$"}{pay.amount.toLocaleString()}
-                          </td>
-                          <td className="py-3 text-right">
-                            <span className={`px-2 py-0.5 rounded text-[8px] tracking-wider uppercase font-mono font-bold ${
-                              pay.status === "Settled"
-                                ? "bg-emerald-950/20 border border-emerald-800 text-emerald-400"
-                                : "bg-yellow-950/20 border border-yellow-800 text-yellow-500 animate-pulse"
-                            }`}>
-                              {pay.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* RENDER SETTINGS TAB */}
-      {activeTab === "settings" && (
-        <div className="space-y-8 font-sans text-white">
-          <div className="bg-[#111111] border border-gray-800 rounded p-6 shadow-md">
-            <h2 className="font-serif text-lg text-white uppercase tracking-tight mb-2">SYSTEM PARAMETERS & SETTINGS</h2>
-            <p className="text-gray-400 text-xs font-light max-w-3xl mb-6">
-              Configure fine-grained storefront tax valuations, shipping tariffs, AI translator architectures, and external ERP integration channels.
-            </p>
-
-            <form onSubmit={handleSaveSettings} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Financial Tariff Configuration */}
-                <div className="bg-[#1A1A1A] border border-gray-800 rounded p-6 space-y-4">
-                  <h3 className="font-serif text-xs text-[#C5A05A] uppercase tracking-wider mb-2 pb-1 border-b border-gray-850">
-                    Storefront Fiscal Tariffs
-                  </h3>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Standard VAT Tax Rate (%)</label>
-                      <input
-                        type="number"
-                        value={settingsTaxRate}
-                        onChange={(e) => setSettingsTaxRate(parseFloat(e.target.value) || 0)}
-                        className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#C5A05A]"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Shipping Cost Flat (USD)</label>
-                      <input
-                        type="number"
-                        value={settingsShippingCost}
-                        onChange={(e) => setSettingsShippingCost(parseFloat(e.target.value) || 0)}
-                        className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#C5A05A]"
-                      />
+                        <option value="Paid">Paid</option>
+                        <option value="Escrow">Escrow</option>
+                        <option value="Refunded">Refunded</option>
+                      </select>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">VAT Free Shipping Threshold (USD)</label>
-                    <input
-                      type="number"
-                      value={settingsVatThreshold}
-                      onChange={(e) => setSettingsVatThreshold(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#C5A05A]"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <div>
-                      <span className="text-xs text-white uppercase font-mono tracking-wider block">Low Stock Alerts</span>
-                      <span className="text-[10px] text-gray-400 font-light">Show warnings in panel when stock dips below 10</span>
-                    </div>
+                  {/* PDF Receipt Export Action */}
+                  <div className="pt-3 border-t border-gray-800 flex justify-between items-center">
                     <button
                       type="button"
-                      onClick={() => setSettingsShowStockAlerts(!settingsShowStockAlerts)}
-                      className={`w-10 h-5 rounded-full p-0.5 transition-colors focus:outline-none ${settingsShowStockAlerts ? "bg-[#C5A05A]" : "bg-gray-800"}`}
+                      onClick={() => {
+                        generatePDFReceipt({
+                          orderRef: viewingOrder.id || "REF-ORDER",
+                          customerName: viewingOrder.customerName || "Patron",
+                          customerEmail: viewingOrder.customerEmail || "N/A",
+                          customerPhone: viewingOrder.customerPhone || "N/A",
+                          shippingAddress: viewingOrder.shippingAddress || "Complimentary DHL Hub Delivery",
+                          gateway: viewingOrder.gateway || "Paystack",
+                          cart: viewingOrder.items || [],
+                          subtotalUSD: viewingOrder.subtotal || viewingOrder.total || 0,
+                          shippingCostUSD: viewingOrder.shippingCost ?? 25,
+                          totalUSD: viewingOrder.total || 0,
+                          currency: storeSettings.baseCurrency,
+                          date: viewingOrder.date || viewingOrder.createdAt
+                        });
+                      }}
+                      className="px-3.5 py-2 bg-[#C5A05A]/20 hover:bg-[#C5A05A] text-[#C5A05A] hover:text-black border border-[#C5A05A]/40 rounded text-xs font-mono font-bold flex items-center space-x-1.5 transition-all cursor-pointer"
                     >
-                      <div className={`w-4 h-4 rounded-full bg-black transition-transform ${settingsShowStockAlerts ? "translate-x-5" : ""}`} />
+                      <Download className="h-3.5 w-3.5" />
+                      <span>Download PDF Receipt</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setViewingOrder(null)}
+                      className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-xs font-mono transition-all cursor-pointer"
+                    >
+                      Close Inspection
                     </button>
                   </div>
                 </div>
-
-                {/* AI & Integration Channels */}
-                <div className="bg-[#1A1A1A] border border-gray-800 rounded p-6 space-y-4">
-                  <h3 className="font-serif text-xs text-[#C5A05A] uppercase tracking-wider mb-2 pb-1 border-b border-gray-850">
-                    AI Translation & Integrations
-                  </h3>
-
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-[#C5A05A] uppercase block mb-1">Master Translation Engine</label>
-                    <select
-                      value={settingsGeminiModel}
-                      onChange={(e) => setSettingsGeminiModel(e.target.value)}
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A] font-mono"
-                    >
-                      <option value="gemini-2.5-pro">Gemini 2.5 Pro (Precision Curation)</option>
-                      <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra High Latency)</option>
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">VIP Luxury Price Multiplier</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={settingsVipMultiplier}
-                        onChange={(e) => setSettingsVipMultiplier(parseFloat(e.target.value) || 1.0)}
-                        className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#C5A05A]"
-                      />
-                      <span className="text-[9px] text-gray-500 block mt-1">Multiplies wholesale supplier values to fit bespoke lookbook margins</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Administrative Integration Token</label>
-                    <div className="flex">
-                      <input
-                        type="password"
-                        readOnly
-                        value={settingsApiToken}
-                        className="flex-1 bg-black border border-gray-850 rounded-l px-3 py-2 text-xs font-mono text-gray-400 focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(settingsApiToken);
-                          alert("System API token copied to clipboard securely.");
-                        }}
-                        className="px-3 bg-gray-850 border border-l-0 border-gray-850 text-[#C5A05A] hover:bg-gray-800 rounded-r text-xs font-mono transition-colors"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                </div>
               </div>
-
-              <div className="flex justify-end pt-4">
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-[#C5A05A] text-black font-mono font-bold text-xs tracking-wider uppercase rounded hover:bg-[#b98b5d] transition-all flex items-center space-x-2 shadow-md"
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  <span>Commit System Parameters</span>
-                </button>
-              </div>
-            </form>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* RENDER NOTIFICATIONS TAB */}
-      {activeTab === "notifications" && (
-        <div className="space-y-8 font-sans text-white">
-          <div className="bg-[#111111] border border-gray-800 rounded p-6 shadow-md">
-            <h2 className="font-serif text-lg text-white uppercase tracking-tight mb-2">ADMINISTRATIVE BROADCAST & ALERTS</h2>
-            <p className="text-gray-400 text-xs font-light max-w-3xl mb-6">
-              Broadcast high-priority alerts across administrative channels, track system heartbeats, and check low-stock reports.
-            </p>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Form to dispatch notifications */}
-              <div className="lg:col-span-5 bg-[#1A1A1A] border border-gray-800 rounded p-6 shadow-sm">
-                <h3 className="font-serif text-sm text-[#C5A05A] uppercase tracking-wider mb-4 pb-2 border-b border-gray-850">
-                  Broadcast Custom Alert
-                </h3>
-                <form onSubmit={handlePublishNotification} className="space-y-4">
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Alert Title *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newNotifTitle}
-                      onChange={(e) => setNewNotifTitle(e.target.value)}
-                      placeholder="e.g. Tannery Outage"
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Alert Category / Priority *</label>
-                    <select
-                      value={newNotifLevel}
-                      onChange={(e: any) => setNewNotifLevel(e.target.value)}
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A]"
-                    >
-                      <option value="info">Patron Information (Info)</option>
-                      <option value="success">Completed Event (Success)</option>
-                      <option value="warning">Immediate Hardware Action (Warning)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[9px] tracking-widest font-mono text-gray-500 uppercase block mb-1">Alert Description *</label>
-                    <textarea
-                      required
-                      rows={4}
-                      value={newNotifText}
-                      onChange={(e) => setNewNotifText(e.target.value)}
-                      placeholder="Supply complete administrative logs or visitor details..."
-                      className="w-full bg-black border border-gray-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A05A] font-sans"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full px-4 py-2 bg-[#C5A05A] text-black font-mono font-bold text-xs tracking-wider uppercase rounded hover:bg-[#b98b5d] transition-all flex items-center justify-center space-x-2"
-                  >
-                    <Bell className="h-4 w-4" />
-                    <span>Broadcast Active Alert</span>
-                  </button>
-                </form>
+        {/* 5. CLIENT RECORDS CUSTOMER MANAGEMENT */}
+        {activeMenu === "customers" && (
+          <div className="space-y-8">
+            <div className={`p-6 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg`}>
+              <div className="mb-6">
+                <h3 className="font-serif text-lg font-medium text-white">Artisanal Patrons Profiles</h3>
+                <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest block mt-0.5">Vetted VIP clients database and transaction history tracking</span>
               </div>
 
-              {/* Feed List */}
-              <div className="lg:col-span-7 space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-gray-850">
-                  <h3 className="font-serif text-sm text-[#C5A05A] uppercase tracking-wider">
-                    Administrative Notifications Stream
-                  </h3>
-                  <button
-                    onClick={() => {
-                      const cleared = adminNotifications.map(n => ({ ...n, read: true }));
-                      setAdminNotifications(cleared);
-                      localStorage.setItem("aurelius_admin_notifications", JSON.stringify(cleared));
-                    }}
-                    className="text-[9px] font-mono uppercase text-gray-400 hover:text-white transition-colors"
-                  >
-                    Mark All Read
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {adminNotifications.map((notif) => (
-                    <div
-                      key={notif.id}
-                      className={`p-4 rounded border transition-all flex items-start justify-between space-x-3 ${
-                        notif.read ? "bg-[#141414] border-gray-900 opacity-60" : "bg-[#1A1A1A] border-gray-850"
-                      }`}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div className={`p-1.5 rounded-full shrink-0 mt-0.5 ${
-                          notif.level === "warning"
-                            ? "bg-red-950/20 text-red-400"
-                            : notif.level === "success"
-                            ? "bg-emerald-950/20 text-emerald-400"
-                            : "bg-blue-950/20 text-blue-400"
-                        }`}>
-                          {notif.level === "warning" ? (
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                          ) : notif.level === "success" ? (
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                          ) : (
-                            <Activity className="h-3.5 w-3.5" />
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <h4 className="font-serif text-xs font-bold text-white uppercase tracking-tight">{notif.title}</h4>
-                            {!notif.read && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#C5A05A] animate-pulse" />
-                            )}
-                          </div>
-                          <p className="text-[11px] text-gray-300 font-light leading-relaxed">{notif.text}</p>
-                          <span className="font-mono text-[8px] text-gray-500 block">{notif.date}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex space-x-1 shrink-0">
-                        <button
-                          onClick={() => handleToggleReadNotification(notif.id)}
-                          className="p-1 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
-                          title={notif.read ? "Mark Unread" : "Mark Read"}
-                        >
-                          <Check className={`h-3 w-3 ${notif.read ? "text-[#C5A05A]" : "text-gray-500"}`} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteNotification(notif.id)}
-                          className="p-1 rounded hover:bg-red-950/20 text-gray-400 hover:text-red-400 transition-colors"
-                          title="Purge alert"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-gray-400">
+                  <thead>
+                    <tr className="border-b border-gray-800 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                      <th className="py-3">Patron Name</th>
+                      <th>Verified Email Address</th>
+                      <th>Contact Phone</th>
+                      <th>Purchase Count</th>
+                      <th>Gross Value Contribution</th>
+                      <th>Vetting Status</th>
+                      <th>Registered Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-850/40">
+                    {customers.map(c => (
+                      <tr key={c.id} className="hover:bg-[#151515]/30 transition-colors">
+                        <td className="py-3.5 font-medium text-white">{c.name}</td>
+                        <td className="font-mono">{c.email}</td>
+                        <td className="font-mono text-gray-400">{c.phone || "Not specified"}</td>
+                        <td className="font-mono font-semibold text-gray-300">{c.totalOrders || 1} orders</td>
+                        <td className="font-mono text-[#C5A05A] font-bold">{formatPrice(c.totalSpending || 420, storeSettings.baseCurrency)}</td>
+                        <td>
+                          <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider ${
+                            c.accountStatus === "VIP" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" :
+                            c.accountStatus === "Suspended" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
+                            "bg-green-500/10 text-green-400 border border-green-500/20"
+                          }`}>
+                            {c.accountStatus || "Active"}
+                          </span>
+                        </td>
+                        <td className="font-mono text-gray-500">{new Date(c.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* 6. GLOBAL STORE SETTINGS */}
+        {activeMenu === "settings" && (
+          <div className="space-y-8">
+            <div className={`p-8 rounded-xl border ${isAdminDark ? "bg-[#111111] border-gray-900" : "bg-white border-neutral-200"} shadow-lg relative`}>
+              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-[#A5673F] to-[#C5A05A]" />
+              
+              <div className="mb-6 border-b border-gray-850/50 pb-4">
+                <h3 className="font-serif text-xl font-medium text-white">Global Storefront Parameters</h3>
+                <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mt-0.5 block">Configure default brand values, base shipping settings and admin passcode</span>
+              </div>
+
+              <form onSubmit={handleSaveSettings} className="space-y-6">
+                
+                {/* Brand & Contact Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Atelier Brand Name</label>
+                    <input 
+                      type="text"
+                      value={storeSettings.storeName}
+                      onChange={(e) => setStoreSettings({ ...storeSettings, storeName: e.target.value })}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Corporate Logo URL</label>
+                    <input 
+                      type="text"
+                      value={storeSettings.logoUrl}
+                      onChange={(e) => setStoreSettings({ ...storeSettings, logoUrl: e.target.value })}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Corporate Contact Email</label>
+                    <input 
+                      type="email"
+                      value={storeSettings.contactEmail}
+                      onChange={(e) => setStoreSettings({ ...storeSettings, contactEmail: e.target.value })}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Private Line Phone</label>
+                    <input 
+                      type="text"
+                      value={storeSettings.contactPhone}
+                      onChange={(e) => setStoreSettings({ ...storeSettings, contactPhone: e.target.value })}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Shipping & Currency */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Default Base Currency</label>
+                    <select 
+                      value={storeSettings.baseCurrency}
+                      onChange={(e) => setStoreSettings({ ...storeSettings, baseCurrency: e.target.value as any })}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="GHS">GHS (GH₵)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">DHL Flat Express Shipping Rate (USD)</label>
+                    <input 
+                      type="number"
+                      value={storeSettings.defaultShippingCost}
+                      onChange={(e) => setStoreSettings({ ...storeSettings, defaultShippingCost: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Social media links */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Facebook Directory</label>
+                    <input 
+                      type="url"
+                      value={storeSettings.socialFacebook}
+                      onChange={(e) => setStoreSettings({ ...storeSettings, socialFacebook: e.target.value })}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Instagram Atelier</label>
+                    <input 
+                      type="url"
+                      value={storeSettings.socialInstagram}
+                      onChange={(e) => setStoreSettings({ ...storeSettings, socialInstagram: e.target.value })}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Twitter Account</label>
+                    <input 
+                      type="url"
+                      value={storeSettings.socialTwitter}
+                      onChange={(e) => setStoreSettings({ ...storeSettings, socialTwitter: e.target.value })}
+                      className="w-full bg-[#181818] border border-gray-800 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Secure Passcode Reset */}
+                <div className="p-4 bg-amber-500/5 rounded border border-amber-500/20 max-w-sm">
+                  <label className="block text-[10px] uppercase tracking-wider text-amber-500 font-bold mb-1">Desk Authentication Passcode</label>
+                  <input 
+                    type="text"
+                    value={storeSettings.adminPassword}
+                    onChange={(e) => setStoreSettings({ ...storeSettings, adminPassword: e.target.value })}
+                    placeholder="aurelius2026"
+                    className="w-full bg-[#181818] border border-gray-850 rounded px-3 py-2 outline-none focus:border-[#C5A05A] text-xs text-white font-mono tracking-wider"
+                    required
+                  />
+                  <span className="text-[9px] text-gray-500 font-light block mt-1">This passcode authenticates control desk sessions globally.</span>
+                </div>
+
+                {/* Feedback flags */}
+                {settingsSuccess && (
+                  <div className="p-3 bg-green-950/20 border border-green-500/30 text-green-400 text-xs rounded flex items-center space-x-2 max-w-md">
+                    <CheckCircle className="h-4 w-4" />
+                    <span>{settingsSuccess}</span>
+                  </div>
+                )}
+
+                {settingsError && (
+                  <div className="p-3 bg-red-950/20 border border-red-500/30 text-red-400 text-xs rounded flex items-center space-x-2 max-w-md">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{settingsError}</span>
+                  </div>
+                )}
+
+                <button 
+                  type="submit"
+                  className="bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white px-6 py-3 rounded text-xs uppercase font-bold tracking-widest transition-colors cursor-pointer shadow border border-transparent"
+                >
+                  Commit Corporate Settings
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+      </main>
 
     </div>
   );

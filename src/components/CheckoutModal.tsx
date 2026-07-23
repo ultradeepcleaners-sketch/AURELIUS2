@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { X, Lock, CheckCircle2, ShieldCheck, Smartphone, CreditCard, Award, ArrowRight, Loader2, RefreshCw } from "lucide-react";
+import { X, Lock, CheckCircle2, ShieldCheck, Smartphone, CreditCard, Award, ArrowRight, Loader2, RefreshCw, Download, FileText } from "lucide-react";
 import { CartItem, CurrencyCode, formatPrice } from "../types";
+import { generatePDFReceipt } from "../utils/pdfGenerator";
 
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPaymentSuccess: () => void;
+  onPaymentSuccess: (details: { customerName: string; customerEmail: string; customerPhone: string; shippingAddress: string; gateway: string }) => void;
   cart: CartItem[];
   currency: CurrencyCode;
 }
@@ -28,10 +29,12 @@ export default function CheckoutModal({
   const [cardCVC, setCardCVC] = useState("");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [shippingAddress, setShippingAddress] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<"form" | "otp" | "success">("form");
   const [otpCode, setOtpCode] = useState("");
   const [momoInstruction, setMomoInstruction] = useState("");
+  const [referenceId, setReferenceId] = useState("");
 
   if (!isOpen) return null;
 
@@ -61,12 +64,36 @@ export default function CheckoutModal({
 
     setTimeout(() => {
       setIsProcessing(false);
+      const newRef = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+      setReferenceId(newRef);
       setStep("success");
     }, 2000);
   };
 
+  const handleDownloadReceipt = () => {
+    generatePDFReceipt({
+      orderRef: referenceId || `REF-${Math.floor(100000 + Math.random() * 900000)}`,
+      customerName: name || "Anonymised Patron",
+      customerEmail: email || "concierge@aurelius.it",
+      customerPhone: momoPhone || cardNumber || "N/A",
+      shippingAddress: shippingAddress || "Complimentary DHL Hub Delivery",
+      gateway,
+      cart,
+      subtotalUSD,
+      shippingCostUSD,
+      totalUSD,
+      currency
+    });
+  };
+
   const handleFinalize = () => {
-    onPaymentSuccess();
+    onPaymentSuccess({
+      customerName: name || "Anonymised Patron",
+      customerEmail: email || "concierge@aurelius.it",
+      customerPhone: momoPhone || cardNumber || "N/A",
+      shippingAddress: shippingAddress || "Complimentary DHL Hub Delivery",
+      gateway
+    });
     onClose();
   };
 
@@ -171,6 +198,26 @@ export default function CheckoutModal({
 
                 {/* Gateway Description and Form */}
                 <form onSubmit={handleStartPayment} className="space-y-4 text-xs">
+                  
+                  {/* Global DHL Shipping Destination */}
+                  <div className="p-3.5 bg-neutral-950 rounded border border-gray-800 space-y-3">
+                    <div className="flex items-center space-x-1.5 text-[10px] text-[#C5A05A] font-mono tracking-widest uppercase font-bold">
+                      <ShieldCheck className="h-4 w-4 text-[#C5A05A]" />
+                      <span>DHL Express Shipping Destination</span>
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 mb-1 text-[10px]">Full Delivery Address *</label>
+                      <textarea
+                        required
+                        rows={2}
+                        placeholder="e.g. 740 Park Ave, New York, NY 10021"
+                        className="w-full bg-[#111] border border-gray-800 rounded px-2.5 py-1.5 outline-none focus:border-[#C5A05A] text-white"
+                        value={shippingAddress}
+                        onChange={(e) => setShippingAddress(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
                   {/* Gateway specifics */}
                   {gateway === "paystack" && (
                     <div className="space-y-3 p-3.5 rounded bg-neutral-900 border border-gray-800">
@@ -464,17 +511,29 @@ export default function CheckoutModal({
 
                 <div className="bg-[#111111] p-3 rounded border border-gray-850 w-full text-left font-mono text-[10px] text-gray-400 space-y-1">
                   <div className="flex justify-between"><span>Merchant:</span> <span className="text-white">AURELIUS ATELIER GHS</span></div>
-                  <div className="flex justify-between"><span>Reference ID:</span> <span className="text-white">REF-{Math.floor(100000 + Math.random() * 900000)}</span></div>
+                  <div className="flex justify-between"><span>Reference ID:</span> <span className="text-white">{referenceId || "REF-849201"}</span></div>
                   <div className="flex justify-between"><span>Channel Node:</span> <span className="text-[#C5A05A] uppercase">{gateway}</span></div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleFinalize}
-                  className="w-full bg-white text-black hover:bg-[#C5A05A] py-3.5 uppercase tracking-widest font-bold rounded text-[10.5px] transition-all font-mono"
-                >
-                  Confirm and Book Commission
-                </button>
+                <div className="w-full space-y-2.5">
+                  <button
+                    type="button"
+                    id="download-pdf-receipt-btn"
+                    onClick={handleDownloadReceipt}
+                    className="w-full bg-[#C5A05A] hover:bg-[#A5673F] text-black hover:text-white py-3.5 uppercase tracking-widest font-bold rounded text-[10.5px] transition-all font-mono flex items-center justify-center space-x-2 shadow-lg cursor-pointer border border-transparent"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Download PDF Receipt</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleFinalize}
+                    className="w-full bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 py-3 uppercase tracking-widest font-bold rounded text-[10.5px] transition-all font-mono cursor-pointer"
+                  >
+                    Confirm and Book Commission
+                  </button>
+                </div>
               </div>
             )}
 

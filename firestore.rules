@@ -12,8 +12,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'ultradeepcleaners@gmail.com' ||
+        request.auth.token.email == 'marcus_sterling@aurelius.it'
+      ) && request.auth.token.email_verified == true;
+    }
+
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isPasscodeMatch() {
+      return (request.resource != null && request.resource.data.keys().hasAll(['adminPasscode']) && request.resource.data.adminPasscode == 'aurelius2026') ||
+             (resource != null && resource.data.keys().hasAll(['adminPasscode']) && resource.data.adminPasscode == 'aurelius2026');
     }
 
     // Hardened Schema validation blueprints
@@ -60,7 +72,7 @@ service cloud.firestore {
     match /products/{productId} {
       allow get: if isValidId(productId);
       allow list: if true;
-      allow write: if isValidId(productId) && (
+      allow write: if isValidId(productId) && (isAdmin() || isPasscodeMatch()) && (
         request.method != 'create' && request.method != 'update' || isValidProduct(request.resource.data)
       );
     }
@@ -69,7 +81,30 @@ service cloud.firestore {
     match /blogs/{blogId} {
       allow get: if isValidId(blogId);
       allow list: if true;
-      allow write: if isValidId(blogId);
+      allow write: if isValidId(blogId) && (isAdmin() || isPasscodeMatch());
+    }
+
+    // Orders collection Match Block
+    match /orders/{orderId} {
+      allow get: if true;
+      allow list, write: if isPasscodeMatch();
+    }
+
+    // Customers collection Match Block
+    match /customers/{customerId} {
+      allow read, write: if isPasscodeMatch();
+    }
+
+    // Collections Match Block
+    match /collections/{collectionId} {
+      allow read: if true;
+      allow write: if isPasscodeMatch();
+    }
+
+    // Settings Match Block
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isPasscodeMatch();
     }
   }
 }

@@ -108,3 +108,15 @@ export function formatPrice(price: number, currency: CurrencyCode): string {
   return `${symbol}${displayVal}`;
 }
 
+export interface Collection {
+  id: string;
+  name: string;
+  description?: string;
+  productIds?: string[];
+  isFeatured?: boolean;
+  isPublished?: boolean;
+  heroImage?: string;
+  badge?: string;
+  createdAt?: string;
+}
+

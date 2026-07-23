@@ -4,7 +4,25 @@ import fs from "fs";
 import dotenv from "dotenv";
 import multer from "multer";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc as originalUpdateDoc, setDoc as originalSetDoc } from "firebase/firestore";
+
+// Custom wrappers to automatically inject adminPasscode for Firestore Security Rules
+const setDoc = async (docRef: any, data: any, options?: any) => {
+  if (data && typeof data === "object") {
+    data.adminPasscode = "aurelius2026";
+  }
+  if (options) {
+    return originalSetDoc(docRef, data, options);
+  }
+  return originalSetDoc(docRef, data);
+};
+
+const updateDoc = async (docRef: any, data: any) => {
+  if (data && typeof data === "object") {
+    data.adminPasscode = "aurelius2026";
+  }
+  return originalUpdateDoc(docRef, data);
+};
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -1565,6 +1583,405 @@ app.post("/api/ai/diagnose-care", async (req, res) => {
   } catch (error: any) {
     console.error("Fatal Error in AI Leather Care Diagnosis:", error);
     res.json({ diagnosis: generateFallbackCareDiagnosis(req.body.material || "smooth leather", req.body.issueType || "wear", req.body.description || "General conditioning request") });
+  }
+});
+
+// ==================== NEW ADMIN DASHBOARD API ENDPOINTS ====================
+
+// GET: All Orders
+app.get("/api/orders", async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+    const querySnapshot = await getDocs(collection(db, "orders"));
+    const orders: any[] = [];
+    querySnapshot.forEach((docSnap) => {
+      orders.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    // Sort recent first
+    orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    res.json({ success: true, data: orders });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error getting orders:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to load orders" });
+  }
+});
+
+// POST: Place New Order
+app.post("/api/orders", async (req, res) => {
+  try {
+    const { 
+      customerName, customerEmail, customerPhone, shippingAddress, 
+      items, subtotal, shippingCost, total, status, paymentStatus, 
+      trackingNumber, gateway 
+    } = req.body;
+
+    if (!customerEmail || !items || items.length === 0 || !total) {
+      return res.status(400).json({ success: false, error: "Missing required order information" });
+    }
+
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not initialized" });
+    }
+
+    const orderId = `AUR-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+    const orderData = {
+      id: orderId,
+      customerName: customerName || "Anonymised Patron",
+      customerEmail,
+      customerPhone: customerPhone || "",
+      shippingAddress: shippingAddress || "",
+      items,
+      subtotal: parseFloat(subtotal) || total,
+      shippingCost: parseFloat(shippingCost) || 0,
+      total: parseFloat(total),
+      status: status || "New",
+      paymentStatus: paymentStatus || "Paid",
+      trackingNumber: trackingNumber || "",
+      gateway: gateway || "paystack",
+      createdAt: new Date().toISOString()
+    };
+
+    await setDoc(doc(db, "orders", orderId), orderData);
+
+    // Dynamic customer updating / tracking
+    try {
+      const custQuerySnapshot = await getDocs(collection(db, "customers"));
+      let customerDocId = "";
+      let existingCust: any = null;
+      
+      custQuerySnapshot.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (d.email && d.email.toLowerCase() === customerEmail.toLowerCase()) {
+          customerDocId = docSnap.id;
+          existingCust = d;
+        }
+      });
+
+      if (customerDocId) {
+        // Update existing customer stats
+        const updatedCust = {
+          ...existingCust,
+          name: customerName || existingCust.name,
+          phone: customerPhone || existingCust.phone || "",
+          address: shippingAddress || existingCust.address || "",
+          totalOrders: (existingCust.totalOrders || 0) + 1,
+          totalSpending: (existingCust.totalSpending || 0) + parseFloat(total),
+          lastOrderAt: new Date().toISOString()
+        };
+        await setDoc(doc(db, "customers", customerDocId), updatedCust);
+      } else {
+        // Create new customer profile
+        const newCustId = `CST-${Date.now().toString().slice(-8)}`;
+        const newCustData = {
+          id: newCustId,
+          name: customerName || "Anonymised Patron",
+          email: customerEmail,
+          phone: customerPhone || "",
+          address: shippingAddress || "",
+          totalOrders: 1,
+          totalSpending: parseFloat(total),
+          accountStatus: "Active",
+          createdAt: new Date().toISOString(),
+          lastOrderAt: new Date().toISOString()
+        };
+        await setDoc(doc(db, "customers", newCustId), newCustData);
+      }
+    } catch (custErr) {
+      console.warn("Could not sync customer tracking metrics:", custErr);
+    }
+
+    res.json({ success: true, message: "Order placed successfully", order: orderData });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error adding order:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to place order" });
+  }
+});
+
+// PUT: Update Order (Status, Tracking, Payment)
+app.put("/api/orders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, paymentStatus, trackingNumber } = req.body;
+
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not initialized" });
+    }
+
+    const orderDocRef = doc(db, "orders", id);
+    const updatePayload: any = {};
+    if (status) updatePayload.status = status;
+    if (paymentStatus) updatePayload.paymentStatus = paymentStatus;
+    if (trackingNumber !== undefined) updatePayload.trackingNumber = trackingNumber;
+    updatePayload.updatedAt = new Date().toISOString();
+
+    await updateDoc(orderDocRef, updatePayload);
+    res.json({ success: true, message: "Order updated successfully" });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error updating order:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to update order" });
+  }
+});
+
+// GET: All Customers
+app.get("/api/customers", async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+    const querySnapshot = await getDocs(collection(db, "customers"));
+    const customers: any[] = [];
+    querySnapshot.forEach((docSnap) => {
+      customers.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    res.json({ success: true, data: customers });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error getting customers:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to load customers" });
+  }
+});
+
+// POST: Add or Update Customer Profile
+app.post("/api/customers", async (req, res) => {
+  try {
+    const { id, name, email, phone, address, accountStatus } = req.body;
+    if (!email || !name) {
+      return res.status(400).json({ success: false, error: "Name and Email are required fields" });
+    }
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not initialized" });
+    }
+
+    const custId = id || `CST-${Date.now().toString().slice(-8)}`;
+    const custData: any = {
+      id: custId,
+      name,
+      email,
+      phone: phone || "",
+      address: address || "",
+      accountStatus: accountStatus || "Active",
+      updatedAt: new Date().toISOString()
+    };
+
+    if (!id) {
+      custData.totalOrders = 0;
+      custData.totalSpending = 0;
+      custData.createdAt = new Date().toISOString();
+    }
+
+    await setDoc(doc(db, "customers", custId), custData, { merge: true });
+    res.json({ success: true, data: custData });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error saving customer:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to save customer" });
+  }
+});
+
+// GET: All Collections
+app.get("/api/collections", async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+    const querySnapshot = await getDocs(collection(db, "collections"));
+    const list: any[] = [];
+    querySnapshot.forEach((docSnap) => {
+      list.push({ id: docSnap.id, ...docSnap.data() });
+    });
+
+    if (list.length === 0) {
+      // Seed default collections if none exist in Firestore
+      const defaultCollections = [
+        { id: "overland", name: "Overland Series", description: "Bespoke wild safari full-grain masterpieces", productIds: ["leathfocus-duffle", "nav-duffel"], isFeatured: true, createdAt: new Date().toISOString() },
+        { id: "squire", name: "Squire Accessories", description: "Vegetable-tanned high-profile business essentials", productIds: [], isFeatured: true, createdAt: new Date().toISOString() },
+        { id: "sovereign", name: "Sovereign Executive", description: "Hand-burnished leather footwear and attire", productIds: [], isFeatured: false, createdAt: new Date().toISOString() }
+      ];
+      for (const col of defaultCollections) {
+        await setDoc(doc(db, "collections", col.id), col);
+        list.push(col);
+      }
+    }
+
+    res.json({ success: true, data: list });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error getting collections:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to load collections" });
+  }
+});
+
+// POST: Add or Update Collection
+app.post("/api/collections", async (req, res) => {
+  try {
+    const { id, name, description, productIds, isFeatured, isPublished, heroImage, badge } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: "Collection name is required" });
+    }
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not initialized" });
+    }
+
+    const colId = id || name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").trim();
+    const colData: any = {
+      id: colId,
+      name,
+      description: description || "",
+      productIds: Array.isArray(productIds) ? productIds : [],
+      isFeatured: isFeatured === true,
+      isPublished: isPublished !== false,
+      createdAt: new Date().toISOString()
+    };
+    if (heroImage) colData.heroImage = heroImage;
+    if (badge) colData.badge = badge;
+
+    await setDoc(doc(db, "collections", colId), colData, { merge: true });
+    res.json({ success: true, data: colData });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error saving collection:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to save collection" });
+  }
+});
+
+// POST: Bulk delete collections
+app.post("/api/collections/bulk-delete", async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: "Array of collection IDs required" });
+    }
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not initialized" });
+    }
+    for (const id of ids) {
+      await deleteDoc(doc(db, "collections", id));
+    }
+    res.json({ success: true, count: ids.length, message: `${ids.length} collections deleted` });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error bulk deleting collections:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed bulk delete" });
+  }
+});
+
+// POST: Bulk publish/unpublish collections
+app.post("/api/collections/bulk-publish", async (req, res) => {
+  try {
+    const { ids, isPublished } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: "Array of collection IDs required" });
+    }
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not initialized" });
+    }
+    const targetStatus = isPublished === true;
+    for (const id of ids) {
+      await setDoc(doc(db, "collections", id), { isPublished: targetStatus, updatedAt: new Date().toISOString() }, { merge: true });
+    }
+    res.json({ success: true, count: ids.length, isPublished: targetStatus, message: `${ids.length} collections updated` });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error bulk updating collection publish status:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed bulk update" });
+  }
+});
+
+// DELETE: purges a collection
+app.delete("/api/collections/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not initialized" });
+    }
+    await deleteDoc(doc(db, "collections", id));
+    res.json({ success: true, message: "Collection deleted successfully" });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error deleting collection:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to delete collection" });
+  }
+});
+
+// GET: Store Settings
+app.get("/api/settings", async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          storeName: "Aurelius Leather",
+          logoUrl: "",
+          contactEmail: "concierge@aurelius.it",
+          contactPhone: "+39 055 234 5678",
+          socialFacebook: "https://facebook.com/aureliusleather",
+          socialInstagram: "https://instagram.com/aureliusleather",
+          socialTwitter: "https://twitter.com/aureliusleather",
+          baseCurrency: "USD",
+          defaultShippingCost: 25,
+          adminPassword: "aurelius2026"
+        }
+      });
+    }
+
+    const querySnapshot = await getDocs(collection(db, "settings"));
+    let settingsData: any = null;
+    querySnapshot.forEach((docSnap) => {
+      if (docSnap.id === "store_config") {
+        settingsData = docSnap.data();
+      }
+    });
+
+    if (!settingsData) {
+      // Seed default settings config in Firestore
+      settingsData = {
+        storeName: "Aurelius Leather",
+        logoUrl: "",
+        contactEmail: "concierge@aurelius.it",
+        contactPhone: "+39 055 234 5678",
+        socialFacebook: "https://facebook.com/aureliusleather",
+        socialInstagram: "https://instagram.com/aureliusleather",
+        socialTwitter: "https://twitter.com/aureliusleather",
+        baseCurrency: "USD",
+        defaultShippingCost: 25,
+        adminPassword: "aurelius2026"
+      };
+      await setDoc(doc(db, "settings", "store_config"), settingsData);
+    }
+
+    res.json({ success: true, data: settingsData });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error getting settings:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to load store settings" });
+  }
+});
+
+// POST: Save Store Settings
+app.post("/api/settings", async (req, res) => {
+  try {
+    const { 
+      storeName, logoUrl, contactEmail, contactPhone, 
+      socialFacebook, socialInstagram, socialTwitter, 
+      baseCurrency, defaultShippingCost, adminPassword 
+    } = req.body;
+
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Database not initialized" });
+    }
+
+    const settingsData = {
+      storeName: storeName || "Aurelius Leather",
+      logoUrl: logoUrl || "",
+      contactEmail: contactEmail || "concierge@aurelius.it",
+      contactPhone: contactPhone || "+39 055 234 5678",
+      socialFacebook: socialFacebook || "",
+      socialInstagram: socialInstagram || "",
+      socialTwitter: socialTwitter || "",
+      baseCurrency: baseCurrency || "USD",
+      defaultShippingCost: parseFloat(defaultShippingCost) || 25,
+      adminPassword: adminPassword || "aurelius2026"
+    };
+
+    await setDoc(doc(db, "settings", "store_config"), settingsData);
+    res.json({ success: true, message: "Settings updated successfully", data: settingsData });
+  } catch (error: any) {
+    console.error("[Aurelius API] Error saving settings:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to save settings" });
   }
 });
 

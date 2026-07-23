@@ -310,6 +310,80 @@ export default function App() {
     localStorage.setItem("aurelius_wishlist", JSON.stringify(wishlist));
   }, [wishlist]);
 
+  // Synchronize cart, wishlist, and currency state across multiple open browser tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "aurelius_cart") {
+        if (e.newValue) {
+          try {
+            setCart(JSON.parse(e.newValue));
+          } catch (err) {
+            console.error("Failed to sync cart from other tab storage event:", err);
+          }
+        } else {
+          setCart([]);
+        }
+      }
+      if (e.key === "aurelius_wishlist") {
+        if (e.newValue) {
+          try {
+            setWishlist(JSON.parse(e.newValue));
+          } catch (err) {
+            console.error("Failed to sync wishlist from other tab storage event:", err);
+          }
+        } else {
+          setWishlist([]);
+        }
+      }
+      if (e.key === "aurelius_currency") {
+        if (e.newValue) {
+          setCurrency(e.newValue as CurrencyCode);
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
+  // Synchronize URL path with active tab for dynamic routing support
+  useEffect(() => {
+    const syncPathToTab = () => {
+      const pathName = window.location.pathname;
+      if (pathName === "/admin") {
+        setActiveTab("admin");
+      } else if (pathName === "/blog") {
+        setActiveTab("blog");
+      } else if (pathName === "/craft") {
+        setActiveTab("craft");
+      } else if (pathName === "/tracker") {
+        setActiveTab("tracker");
+      } else if (pathName === "/lookbook") {
+        setActiveTab("lookbook");
+      } else if (pathName === "/account") {
+        setActiveTab("account");
+      } else if (pathName === "/" || pathName === "") {
+        setActiveTab("shop");
+      }
+    };
+
+    syncPathToTab();
+    window.addEventListener("popstate", syncPathToTab);
+    return () => {
+      window.removeEventListener("popstate", syncPathToTab);
+    };
+  }, []);
+
+  useEffect(() => {
+    const currentPath = window.location.pathname;
+    const targetPath = activeTab === "shop" ? "/" : `/${activeTab}`;
+    if (currentPath !== targetPath) {
+      window.history.pushState(null, "", targetPath);
+    }
+  }, [activeTab]);
+
   // Handle Cart updates
   const handleAddToCart = (product: Product, quantity: number, color: string) => {
     setCart(prevCart => {
@@ -364,11 +438,57 @@ export default function App() {
     });
   };
 
-  // Perform secure sandbox checkout
-  const handleCheckout = () => {
-    setCart([]); // Clear cart
-    setIsCartOpen(false);
-    setCheckoutSuccess(true);
+  // Perform secure sandbox checkout and persist order to database
+  const handleCheckout = async (details: { customerName: string; customerEmail: string; customerPhone: string; shippingAddress: string; gateway: string }) => {
+    try {
+      const subtotalUSD = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+      const isFreeShipping = subtotalUSD >= 300;
+      const shippingCostUSD = isFreeShipping ? 0 : 25;
+      const totalUSD = subtotalUSD + shippingCostUSD;
+
+      const orderPayload = {
+        customerName: details.customerName,
+        customerEmail: details.customerEmail,
+        customerPhone: details.customerPhone,
+        shippingAddress: details.shippingAddress,
+        items: cart,
+        subtotal: subtotalUSD,
+        shippingCost: shippingCostUSD,
+        total: totalUSD,
+        status: "New",
+        paymentStatus: "Paid",
+        gateway: details.gateway
+      };
+
+      console.log("[Aurelius Client Trace] Submitting new order to Firestore...", orderPayload);
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderPayload)
+      });
+      if (response.ok) {
+        console.log("[Aurelius Client Trace] Order successfully logged in database.");
+        
+        // Deduct inventory stock on client-side
+        const orderData = await response.json();
+        if (orderData.success) {
+          const updatedProducts = products.map(p => {
+            const boughtItem = cart.find(item => item.product.id === p.id);
+            if (boughtItem) {
+              return { ...p, inStock: Math.max(0, p.inStock - boughtItem.quantity) };
+            }
+            return p;
+          });
+          setProducts(updatedProducts);
+        }
+      }
+    } catch (e) {
+      console.error("[Aurelius Order Sync Error] Failed to submit checkout order to API:", e);
+    } finally {
+      setCart([]); // Clear cart
+      setIsCartOpen(false);
+      setCheckoutSuccess(true);
+    }
   };
 
   // Handle Search Query filtering
