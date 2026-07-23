@@ -4,7 +4,8 @@ import {
   Users, Settings, Sun, Moon, Plus, Edit, Trash2, Upload, CheckCircle, 
   AlertCircle, ArrowRight, Search, Eye, Truck, TrendingUp, Coins, LogOut, Play,
   Briefcase, Check, Mail, Phone, MapPin, DollarSign, RefreshCw, X, ShieldAlert,
-  EyeOff, CheckSquare, Square, Sparkles, Zap, Tag, Star, Layers, Filter, Bookmark, Download
+  EyeOff, CheckSquare, Square, Sparkles, Zap, Tag, Star, Layers, Filter, Bookmark, Download,
+  Database, Wifi, WifiOff
 } from "lucide-react";
 import { 
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, 
@@ -12,7 +13,7 @@ import {
 } from "recharts";
 import { Product, CurrencyCode, formatPrice } from "../types";
 import { db } from "../firebase";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { collection, doc, setDoc, getDocs, deleteDoc, addDoc } from "firebase/firestore";
 import { generatePDFReceipt } from "../utils/pdfGenerator";
 
 // Quick-Create Featured Collection Templates
@@ -240,54 +241,135 @@ export default function AdminPanel({
   const [settingsSuccess, setSettingsSuccess] = useState("");
   const [settingsError, setSettingsError] = useState("");
 
+  // Database Read Status Verification State
+  const [dbStatus, setDbStatus] = useState<"checking" | "connected" | "error">("checking");
+  const [dbErrorMessage, setDbErrorMessage] = useState<string | null>(null);
+  const [dbProductCount, setDbProductCount] = useState<number | null>(null);
+  const [dbLastChecked, setDbLastChecked] = useState<string | null>(null);
+  const [isRecheckingDb, setIsRecheckingDb] = useState<boolean>(false);
+
+  // Verifies if the AdminPanel can successfully read from the 'products' Firestore collection
+  const checkDatabaseStatus = async () => {
+    setIsRecheckingDb(true);
+    setDbStatus("checking");
+    try {
+      const productsSnap = await getDocs(collection(db, "products"));
+      setDbStatus("connected");
+      setDbErrorMessage(null);
+      setDbProductCount(productsSnap.size);
+      setDbLastChecked(new Date().toLocaleTimeString());
+    } catch (err: any) {
+      console.error("[Firestore Products Read Check Failed]:", err);
+      setDbStatus("error");
+      setDbErrorMessage(err?.message || "Failed to query 'products' Firestore collection.");
+      setDbLastChecked(new Date().toLocaleTimeString());
+    } finally {
+      setIsRecheckingDb(false);
+    }
+  };
+
   // Load all lists from backend/Firestore
   const fetchAllData = async () => {
     try {
       // 1. Fetch settings
       setLoadingSettings(true);
-      const settingsRes = await fetch("/api/settings");
-      if (settingsRes.ok) {
-        const settingsPayload = await settingsRes.json();
-        if (settingsPayload.success && settingsPayload.data) {
-          setStoreSettings(settingsPayload.data);
+      try {
+        const settingsRes = await fetch("/api/settings");
+        if (settingsRes.ok) {
+          const contentType = settingsRes.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const settingsPayload = await settingsRes.json();
+            if (settingsPayload.success && settingsPayload.data) {
+              setStoreSettings(settingsPayload.data);
+            }
+          } else {
+            throw new Error("Non-JSON response");
+          }
+        } else {
+          throw new Error("HTTP error");
         }
+      } catch {
+        const setSnap = await getDocs(collection(db, "settings"));
+        setSnap.forEach(d => {
+          if (d.id === "store_config") setStoreSettings(d.data() as any);
+        });
       }
       setLoadingSettings(false);
 
       // 2. Fetch orders
       setLoadingOrders(true);
-      const ordersRes = await fetch("/api/orders");
-      if (ordersRes.ok) {
-        const ordersPayload = await ordersRes.json();
-        if (ordersPayload.success && ordersPayload.data) {
-          setOrders(ordersPayload.data);
+      try {
+        const ordersRes = await fetch("/api/orders");
+        if (ordersRes.ok) {
+          const contentType = ordersRes.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const ordersPayload = await ordersRes.json();
+            if (ordersPayload.success && ordersPayload.data) {
+              setOrders(ordersPayload.data);
+            }
+          } else {
+            throw new Error("Non-JSON response");
+          }
+        } else {
+          throw new Error("HTTP error");
         }
+      } catch {
+        const ordSnap = await getDocs(collection(db, "orders"));
+        const ordList: any[] = [];
+        ordSnap.forEach(d => ordList.push({ id: d.id, ...d.data() }));
+        setOrders(ordList);
       }
       setLoadingOrders(false);
 
       // 3. Fetch customers
       setLoadingCustomers(true);
-      const customersRes = await fetch("/api/customers");
-      if (customersRes.ok) {
-        const customersPayload = await customersRes.json();
-        if (customersPayload.success && customersPayload.data && customersPayload.data.length > 0) {
-          setCustomers(customersPayload.data);
+      try {
+        const customersRes = await fetch("/api/customers");
+        if (customersRes.ok) {
+          const contentType = customersRes.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const customersPayload = await customersRes.json();
+            if (customersPayload.success && customersPayload.data && customersPayload.data.length > 0) {
+              setCustomers(customersPayload.data);
+            } else {
+              setCustomers(DEFAULT_CUSTOMERS);
+            }
+          } else {
+            throw new Error("Non-JSON response");
+          }
         } else {
           setCustomers(DEFAULT_CUSTOMERS);
         }
-      } else {
-        setCustomers(DEFAULT_CUSTOMERS);
+      } catch {
+        const custSnap = await getDocs(collection(db, "customers"));
+        const custList: any[] = [];
+        custSnap.forEach(d => custList.push({ id: d.id, ...d.data() }));
+        setCustomers(custList.length > 0 ? custList : DEFAULT_CUSTOMERS);
       }
       setLoadingCustomers(false);
 
       // 4. Fetch collections
       setLoadingCollections(true);
-      const collectionsRes = await fetch("/api/collections");
-      if (collectionsRes.ok) {
-        const collectionsPayload = await collectionsRes.json();
-        if (collectionsPayload.success && collectionsPayload.data) {
-          setCollections(collectionsPayload.data);
+      try {
+        const collectionsRes = await fetch("/api/collections");
+        if (collectionsRes.ok) {
+          const contentType = collectionsRes.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const collectionsPayload = await collectionsRes.json();
+            if (collectionsPayload.success && collectionsPayload.data) {
+              setCollections(collectionsPayload.data);
+            }
+          } else {
+            throw new Error("Non-JSON response");
+          }
+        } else {
+          throw new Error("HTTP error");
         }
+      } catch {
+        const colSnap = await getDocs(collection(db, "collections"));
+        const colList: any[] = [];
+        colSnap.forEach(d => colList.push({ id: d.id, ...d.data() }));
+        setCollections(colList);
       }
       setLoadingCollections(false);
     } catch (e) {
@@ -295,9 +377,40 @@ export default function AdminPanel({
     }
   };
 
+  // Dedicated mount useEffect hook to test Firestore read permissions on 'products' collection
+  useEffect(() => {
+    let isMounted = true;
+    const testProductsCollectionPermissions = async () => {
+      setDbStatus("checking");
+      try {
+        const productsSnap = await getDocs(collection(db, "products"));
+        if (isMounted) {
+          setDbStatus("connected");
+          setDbErrorMessage(null);
+          setDbProductCount(productsSnap.size);
+          setDbLastChecked(new Date().toLocaleTimeString());
+        }
+      } catch (err: any) {
+        console.error("[Firestore 'products' Read Permission Error]:", err);
+        if (isMounted) {
+          setDbStatus("error");
+          setDbErrorMessage(err?.message || "Missing or insufficient permissions to read 'products' collection.");
+          setDbLastChecked(new Date().toLocaleTimeString());
+        }
+      }
+    };
+
+    testProductsCollectionPermissions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchAllData();
+      checkDatabaseStatus();
     }
   }, [isAuthenticated]);
 
@@ -403,30 +516,84 @@ export default function AdminPanel({
         payload.originalPrice = parseFloat(formDiscountPrice);
       }
 
-      let method = "POST";
-      let url = "/api/products";
+      let saveSuccess = false;
+      let resultProduct: Product | null = null;
 
-      if (productUnderEdit) {
-        method = "PUT";
-        url = `/api/products/${productUnderEdit.id}`;
+      try {
+        let method = "POST";
+        let url = "/api/products";
+
+        if (productUnderEdit) {
+          method = "PUT";
+          url = `/api/products/${productUnderEdit.id}`;
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
+          const data = await res.json();
+          if (data && data.success) {
+            saveSuccess = true;
+            resultProduct = data.product;
+          }
+        }
+      } catch (err) {
+        console.warn("[Admin Panel] API save failed, attempting direct Firestore write fallback...", err);
       }
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      // Direct Firestore Fallback if backend API is not running or returned 404 (e.g., Vercel static deployment)
+      if (!saveSuccess) {
+        console.log("[Admin Panel] Executing direct Firestore product write fallback...");
+        const targetId = productUnderEdit ? productUnderEdit.id : doc(collection(db, "products")).id;
+        
+        let allImages = [...existingImagesList, ...base64Images];
+        if (fallbackImageUrl.trim() && !fallbackImageUrl.startsWith("data:")) {
+          allImages.push(fallbackImageUrl.trim());
+        }
+        if (allImages.length === 0) {
+          allImages = ["https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=800"];
+        }
 
-      const data = await res.json();
+        const fallbackProduct: Product = {
+          id: targetId,
+          name: formName,
+          price: parseFloat(formPrice),
+          originalPrice: formDiscountPrice ? parseFloat(formDiscountPrice) : undefined,
+          category: formCategory,
+          subcategory: formSubcategory || "Heritage Craft",
+          description: formDescription,
+          image: allImages[0],
+          images: allImages,
+          features: featuresArray,
+          variantColors: variantColorsArray,
+          variantColorsHex: variantColorsHexArray,
+          dimensions: formDimensions,
+          weight: formWeight,
+          careInstructions: formCare,
+          inStock: parseInt(formStock) || 10,
+          rating: productUnderEdit?.rating || 5.0,
+          reviewsCount: productUnderEdit?.reviewsCount || 1,
+          skus: [{ sku: generatedSku, color: variantColorsArray[0] || "Classic Amber", inStock: parseInt(formStock) || 10 }]
+        };
 
-      if (res.ok && data.success) {
+        await setDoc(doc(db, "products", targetId), fallbackProduct);
+        resultProduct = fallbackProduct;
+        saveSuccess = true;
+      }
+
+      if (saveSuccess && resultProduct) {
         setProductFormSuccess(productUnderEdit ? "Masterpiece updated successfully." : "New masterpiece published to collection.");
         
         // Sync parent App.tsx state via callbacks
         if (productUnderEdit) {
-          onProductUpdated(data.product);
+          onProductUpdated(resultProduct);
         } else {
-          onProductAdded(data.product);
+          onProductAdded(resultProduct);
         }
 
         // Add product to selected collections
@@ -434,12 +601,16 @@ export default function AdminPanel({
           for (const colId of selectedCollections) {
             const col = collections.find(c => c.id === colId);
             if (col) {
-              const updatedProductIds = Array.from(new Set([...(col.productIds || []), data.product.id]));
-              await fetch("/api/collections", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...col, productIds: updatedProductIds })
-              });
+              const updatedProductIds = Array.from(new Set([...(col.productIds || []), resultProduct.id]));
+              try {
+                await fetch("/api/collections", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ ...col, productIds: updatedProductIds })
+                });
+              } catch {
+                await setDoc(doc(db, "collections", colId), { ...col, productIds: updatedProductIds }, { merge: true });
+              }
             }
           }
         }
@@ -448,10 +619,10 @@ export default function AdminPanel({
         resetProductForm();
         fetchAllData();
       } else {
-        setProductFormError(data.error || "The cloud server rejected the masterpiece submission.");
+        setProductFormError("The masterpiece submission could not be processed.");
       }
     } catch (err: any) {
-      setProductFormError(err.message || "A network error interrupted the transmission.");
+      setProductFormError(err.message || "An error interrupted the submission.");
     } finally {
       setIsUploadingFiles(false);
     }
@@ -1147,14 +1318,88 @@ export default function AdminPanel({
             <p className="text-xs text-gray-500 font-mono uppercase tracking-widest mt-1">Aurelius Luxury Storefront Management Core</p>
           </div>
           
-          <div className="flex space-x-3 text-xs font-mono">
-            <div className={`px-4 py-2 rounded border ${isAdminDark ? "bg-[#111] border-gray-850" : "bg-white border-neutral-200"} flex items-center space-x-2`}>
-              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-gray-400">Database Engine:</span>
-              <span className="text-white font-bold">FIRESTORE-ONLINE</span>
+          <div className="flex items-center space-x-3 text-xs font-mono">
+            {/* Real-time Database Status Indicator */}
+            <div className={`px-4 py-2.5 rounded-lg border transition-all flex items-center space-x-3 ${
+              dbStatus === "connected"
+                ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-300"
+                : dbStatus === "error"
+                ? "bg-red-950/40 border-red-500/60 text-red-300 shadow-lg shadow-red-950/50"
+                : "bg-amber-950/30 border-amber-500/40 text-amber-300"
+            }`}>
+              <div className="relative flex items-center justify-center">
+                <Database className="h-4 w-4 shrink-0" />
+                <div className={`absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border border-black ${
+                  dbStatus === "connected"
+                    ? "bg-emerald-500 animate-pulse"
+                    : dbStatus === "error"
+                    ? "bg-red-500 animate-ping"
+                    : "bg-amber-400 animate-pulse"
+                }`} />
+              </div>
+
+              <div className="flex flex-col">
+                <div className="flex items-center space-x-1.5 font-bold tracking-wider text-[11px] uppercase">
+                  <span>Database Status:</span>
+                  {dbStatus === "connected" && <span className="text-emerald-400">FIRESTORE READ OK</span>}
+                  {dbStatus === "error" && <span className="text-red-400">READ FAILED</span>}
+                  {dbStatus === "checking" && <span className="text-amber-400">TESTING...</span>}
+                </div>
+                
+                <div className="text-[9px] font-normal flex items-center space-x-2 mt-0.5">
+                  {dbStatus === "connected" && (
+                    <span className="text-emerald-200/80">'products' verified ({dbProductCount ?? 0} SKUs) • {dbLastChecked}</span>
+                  )}
+                  {dbStatus === "error" && (
+                    <span className="text-red-300 font-semibold font-mono">Unable to query 'products' collection</span>
+                  )}
+                  {dbStatus === "checking" && (
+                    <span className="text-amber-200/80">Reading Firestore 'products'...</span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={checkDatabaseStatus}
+                disabled={isRecheckingDb}
+                title="Re-verify Firestore 'products' read status"
+                className="p-1.5 hover:bg-white/10 rounded text-gray-400 hover:text-white transition-all disabled:opacity-50 cursor-pointer ml-1 flex items-center justify-center"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRecheckingDb ? "animate-spin text-[#C5A05A]" : ""}`} />
+              </button>
             </div>
           </div>
         </header>
+
+        {/* CONNECTION ERROR ALERT BANNER */}
+        {dbStatus === "error" && (
+          <div className="mb-6 p-4 rounded-xl border border-red-500/50 bg-red-950/30 text-red-200 flex items-start justify-between shadow-lg">
+            <div className="flex items-start space-x-3">
+              <ShieldAlert className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-semibold text-sm text-red-300 tracking-wide font-mono uppercase">Firestore Database Connection Alert</h4>
+                <p className="text-xs text-red-200/90 mt-1">
+                  Unable to read from the <code className="bg-black/40 px-1.5 py-0.5 rounded text-red-300 font-mono">products</code> Firestore collection.
+                  {dbErrorMessage ? ` Detail: ${dbErrorMessage}` : " Please check network connectivity or Firestore security rules."}
+                </p>
+                <p className="text-[11px] text-red-400/80 mt-1 font-mono">
+                  Timestamp: {dbLastChecked || "N/A"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={checkDatabaseStatus}
+              disabled={isRecheckingDb}
+              className="bg-red-900/60 hover:bg-red-800 text-white text-xs px-3 py-1.5 rounded border border-red-500/40 font-mono tracking-wider transition-all flex items-center space-x-1.5 shrink-0 ml-4 cursor-pointer"
+            >
+              <RefreshCw className={`h-3 w-3 ${isRecheckingDb ? "animate-spin" : ""}`} />
+              <span>Retry Read</span>
+            </button>
+          </div>
+        )}
 
         {/* 1. DASHBOARD HOME VIEW */}
         {activeMenu === "dashboard" && (
@@ -2721,6 +2966,60 @@ export default function AdminPanel({
         )}
 
       </main>
+
+      {/* ADMIN PANEL FOOTER WITH CONNECTION STATUS INDICATOR */}
+      <footer className="mt-auto border-t border-gray-800/40 bg-[#0d0d0d] px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono">
+        <div className="flex items-center space-x-3 text-gray-400">
+          <Database className="h-4 w-4 text-[#C5A05A]" />
+          <span>Aurelius Luxury Storefront Management Core</span>
+        </div>
+
+        {/* Connection Status Indicator */}
+        <div className={`px-4 py-2.5 rounded-lg border transition-all flex items-center space-x-3 ${
+          dbStatus === "connected"
+            ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-300"
+            : dbStatus === "error"
+            ? "bg-red-950/40 border-red-500/60 text-red-300 shadow-md shadow-red-950/50 animate-pulse"
+            : "bg-amber-950/30 border-amber-500/40 text-amber-300"
+        }`}>
+          <div className="relative flex items-center justify-center">
+            {dbStatus === "connected" && <Wifi className="h-4 w-4 text-emerald-400" />}
+            {dbStatus === "error" && <WifiOff className="h-4 w-4 text-red-400" />}
+            {dbStatus === "checking" && <RefreshCw className="h-4 w-4 text-amber-400 animate-spin" />}
+          </div>
+
+          <div className="flex flex-col">
+            <div className="flex items-center space-x-2 font-bold tracking-wider uppercase text-[11px]">
+              <span className="text-gray-400 font-normal">Connection Status:</span>
+              {dbStatus === "connected" && <span className="text-emerald-400">CONNECTED (READ OK)</span>}
+              {dbStatus === "error" && <span className="text-red-400 font-extrabold">READ OPERATION FAILED</span>}
+              {dbStatus === "checking" && <span className="text-amber-400">TESTING PERMISSIONS...</span>}
+            </div>
+            
+            <div className="text-[10px] font-normal mt-0.5">
+              {dbStatus === "connected" && (
+                <span className="text-emerald-200/80">'products' collection read verified ({dbProductCount ?? 0} SKUs) • {dbLastChecked}</span>
+              )}
+              {dbStatus === "error" && (
+                <span className="text-red-300 font-medium">{dbErrorMessage || "Firestore read operations failed for 'products' collection."}</span>
+              )}
+              {dbStatus === "checking" && (
+                <span className="text-amber-200/80">Verifying read permissions on 'products' Firestore collection...</span>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={checkDatabaseStatus}
+            disabled={isRecheckingDb}
+            className="ml-2 bg-black/40 hover:bg-black/80 px-2.5 py-1 rounded border border-gray-700 text-gray-300 hover:text-white transition-all flex items-center space-x-1 cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${isRecheckingDb ? "animate-spin text-[#C5A05A]" : ""}`} />
+            <span className="text-[10px] uppercase">Test Read</span>
+          </button>
+        </div>
+      </footer>
 
     </div>
   );

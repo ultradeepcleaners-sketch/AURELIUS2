@@ -169,6 +169,25 @@ export default function App() {
       const url = "/api/products";
       const method = "GET";
       
+      const sanitizeProduct = (p: any): Product => {
+        const isExternalSite = typeof window !== "undefined" && !window.location.hostname.includes("ais-dev") && !window.location.hostname.includes("localhost") && !window.location.hostname.includes("run.app");
+        const sanitizeUrl = (url: string | undefined) => {
+          if (!url) return "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=800";
+          if (url.startsWith("/uploads/") && isExternalSite) {
+            return "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=800";
+          }
+          return url;
+        };
+        const mainImg = sanitizeUrl(p.image);
+        const imagesList = Array.isArray(p.images) ? p.images.map(sanitizeUrl) : [mainImg];
+        return {
+          ...p,
+          image: mainImg,
+          images: imagesList,
+          thumbnail: mainImg
+        };
+      };
+
       const fetchDirectFromFirestore = async () => {
         const pathForGetDocs = "products";
         try {
@@ -177,7 +196,7 @@ export default function App() {
           const firestoreProds: any[] = [];
           querySnapshot.forEach((doc) => {
             const data = doc.data();
-            firestoreProds.push({ id: doc.id, ...data });
+            firestoreProds.push(sanitizeProduct({ id: doc.id, ...data }));
           });
           console.log("[Aurelius Client Trace] Direct Firestore products loaded:", firestoreProds);
           if (firestoreProds.length > 0) {

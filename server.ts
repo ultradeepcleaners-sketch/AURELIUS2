@@ -94,8 +94,9 @@ async function uploadBase64ToStorage(base64Str: string, folder: string, id: stri
     return base64Str;
   }
   if (!fbStorage) {
-    console.warn("[Aurelius Server Storage] WARNING: Firebase Storage not initialized. Storing base64 fallback locally.");
-    return saveBase64Locally(base64Str, folder, id, index);
+    console.warn("[Aurelius Server Storage] WARNING: Firebase Storage not initialized. Saving local backup and returning base64 data URL for deployment compatibility.");
+    saveBase64Locally(base64Str, folder, id, index);
+    return base64Str;
   }
   try {
     const matches = base64Str.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
@@ -111,8 +112,9 @@ async function uploadBase64ToStorage(base64Str: string, folder: string, id: stri
     const snapshot = await uploadBytes(storageRef, buffer, { contentType: mimeType });
     return await getDownloadURL(snapshot.ref);
   } catch (err) {
-    console.error("[Aurelius Server Storage Error] Failed to upload base64 image, falling back to local file:", err);
-    return saveBase64Locally(base64Str, folder, id, index);
+    console.error("[Aurelius Server Storage Error] Failed to upload base64 image to Firebase Storage. Saving local backup and preserving base64 data URL for universal deployment:", err);
+    saveBase64Locally(base64Str, folder, id, index);
+    return base64Str;
   }
 }
 

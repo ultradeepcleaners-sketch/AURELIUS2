@@ -14,11 +14,15 @@ function LazyImage({ src, alt, className = "", referrerPolicy }: LazyImageProps)
   const [isIntersected, setIsIntersected] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [imgSrc, setImgSrc] = useState(src);
+  const [hasTriedFallback, setHasTriedFallback] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsLoaded(false);
     setHasError(false);
+    setImgSrc(src);
+    setHasTriedFallback(false);
 
     if (!("IntersectionObserver" in window)) {
       setIsIntersected(true);
@@ -50,6 +54,21 @@ function LazyImage({ src, alt, className = "", referrerPolicy }: LazyImageProps)
       observer.disconnect();
     };
   }, [src]);
+
+  const handleError = () => {
+    if (!hasTriedFallback) {
+      setHasTriedFallback(true);
+      setImgSrc("https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=800");
+    } else {
+      setHasError(true);
+      AureliusLogger.log({
+        type: "error",
+        url: src,
+        method: "GET (Image)",
+        error: `Failed to load product grid image asset for "${alt}"`
+      });
+    }
+  };
 
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-[#111111] flex items-center justify-center">
@@ -83,19 +102,11 @@ function LazyImage({ src, alt, className = "", referrerPolicy }: LazyImageProps)
       {/* Actual image element loaded dynamically */}
       {isIntersected && !hasError && (
         <img
-          src={src}
+          src={imgSrc}
           alt={alt}
           referrerPolicy={referrerPolicy}
           onLoad={() => setIsLoaded(true)}
-          onError={() => {
-            setHasError(true);
-            AureliusLogger.log({
-              type: "error",
-              url: src,
-              method: "GET (Image)",
-              error: `Failed to load product grid image asset for "${alt}"`
-            });
-          }}
+          onError={handleError}
           className={`${className} transition-all duration-1000 ease-out ${
             isLoaded ? "opacity-100 blur-0 scale-100" : "opacity-0 blur-sm scale-102"
           }`}
