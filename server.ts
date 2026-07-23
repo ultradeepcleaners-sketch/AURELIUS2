@@ -310,8 +310,19 @@ const uploadMulti = multer({
   }
 });
 
-// Serve uploaded files statically
-app.use("/uploads", express.static(uploadsDir));
+// Serve uploaded files statically with explicit 404 fallback
+app.use("/uploads", express.static(uploadsDir), (req, res) => {
+  res.status(404).send("Upload file not found");
+});
+
+// Serve assets directory images with explicit 404 fallback
+app.use("/src/assets/images", (req, res, next) => {
+  const filePath = path.join(process.cwd(), "src/assets/images", req.path);
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  res.status(404).send("Asset image not found");
+});
 
 // Initialize Google Gen AI client lazily to prevent startup crashes if GEMINI_API_KEY is not set yet
 let aiClient: GoogleGenAI | null = null;
